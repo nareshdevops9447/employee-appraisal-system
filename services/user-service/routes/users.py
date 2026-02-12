@@ -139,3 +139,64 @@ def get_manager_chain(user_id):
         current = current.manager
     
     return jsonify(chain)
+
+
+@users_bp.route('/sync', methods=['POST'])
+def sync_user():
+    """Sync user from Auth Service (called on login)."""
+    data = request.get_json() or {}
+    auth_user_id = data.get('auth_user_id')
+    email = data.get('email')
+    azure_oid = data.get('azure_oid')
+    manager_oid = data.get('manager_oid') # The OID of the manager from Azure AD
+    
+    if not auth_user_id or not email:
+        return jsonify({'error': 'Missing required fields'}), 400
+
+    # 1. Provide upsert logic for the user
+    user = UserProfile.query.get(auth_user_id)
+    if not user:
+        # Check by email as fallback
+        user = UserProfile.query.filter_by(email=email).first()
+        
+    if not user:
+        # Create new skeleton user profile if not exists
+        # Name might be in data 'display_name' or split
+        display_name = data.get('display_name', '')
+        parts = display_name.split(' ', 1)
+        first_name = parts[0] if parts else 'Unknown'
+        last_name = parts[1] if len(parts) > 1 else 'User'
+        
+        user = UserProfile(
+            id=auth_user_id,
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+            azure_oid=azure_oid,
+            is_active=True
+        )
+        db.session.add(user)
+    else:
+        # Update existing user
+        if azure_oid:
+            user.azure_oid = azure_oid
+            
+    # 2. Handle Manager Sync
+    if manager_oid:
+        # Find the manager by their Azure OID
+        manager = UserProfile.query.filter_by(azure_oid=manager_oid).first()
+        if manager:
+            user.manager_id = manager.id
+        else:
+            # Manager not found yet, maybe they haven't logged in. 
+            # We can't link them yet. But if we have manager_oid, 
+            # we might want to store it temporarily if we had a field for it, 
+            # but for now we just skip.
+            pass
+
+    try:
+        db.session.commit()
+        return jsonify(user.to_dict()), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500

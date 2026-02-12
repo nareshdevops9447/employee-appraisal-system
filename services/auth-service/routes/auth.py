@@ -11,6 +11,7 @@ from flask import Blueprint, request, jsonify, g, current_app
 import requests as http_requests
 
 from app import db
+from app import db
 from models.user import UserAuth
 from models.refresh_token import RefreshToken
 from utils.jwt_utils import (
@@ -21,6 +22,7 @@ from utils.jwt_utils import (
     validate_azure_token,
 )
 from utils.decorators import require_auth
+from utils.graph_client import GraphClient
 
 logger = logging.getLogger(__name__)
 
@@ -102,8 +104,19 @@ def azure_callback():
     access_token = create_access_token(user)
     refresh_token_raw, refresh_token_id = create_refresh_token(user, db.session)
 
+    # --- Fetch Manager from Graph API ---
+    # We use the incoming id_token/access_token. 
+    # NOTE: The id_token might not work for Graph API calls if it's just an ID token.
+    # Usually we need an access token for Graph.
+    # The frontend should pass the Access Token intended for Graph API, or we rely on OBO.
+    # If the frontend passes 'access_token' in `data`, use that. If `id_token`, we might fail.
+    # We'll try using the token we received.
+    incoming_token = data.get('access_token') or id_token
+    manager_info = GraphClient.get_user_manager(incoming_token)
+    manager_oid = manager_info.get('azure_oid') if manager_info else None
+
     # --- Optionally sync user to User Service ---
-    _sync_user_to_user_service(user, name)
+    _sync_user_to_user_service(user, name, manager_oid)
 
     return jsonify({
         'access_token': access_token,
@@ -140,7 +153,7 @@ def _map_azure_roles(azure_payload):
     return 'employee'
 
 
-def _sync_user_to_user_service(user, display_name=''):
+def _sync_user_to_user_service(user, display_name='', manager_oid=None):
     """Best-effort sync of user profile to the User Service."""
     user_service_url = current_app.config.get('USER_SERVICE_URL', '')
     if not user_service_url:
@@ -155,6 +168,7 @@ def _sync_user_to_user_service(user, display_name=''):
                 'display_name': display_name,
                 'role': user.role,
                 'azure_oid': user.azure_oid,
+                'manager_oid': manager_oid
             },
             timeout=5,
         )

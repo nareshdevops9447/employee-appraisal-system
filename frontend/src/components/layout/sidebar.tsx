@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/lib/ui-store";
 import { Button } from "@/components/ui/button";
+import { useAuthStore } from "@/lib/auth-store";
 import {
     LayoutDashboard,
     ClipboardCheck,
@@ -66,11 +67,39 @@ const navItems = [
     },
 ];
 
+
+import { signOut } from "next-auth/react";
+import apiClient from "@/lib/api-client";
+import { useRouter } from "next/navigation";
+
 export function Sidebar() {
     const pathname = usePathname();
+    const router = useRouter();
     const { data: session } = useSession();
     const { sidebarOpen, toggleSidebar } = useUIStore();
+    const { clearAuth } = useAuthStore();
     const userRole = session?.user?.role || "employee";
+
+    const handleLogout = async () => {
+        try {
+            // 1. Revoke token on backend (fire and forget to avoid blocking UI)
+            if (session?.refreshToken) {
+                await apiClient.post("/auth/logout", {
+                    refresh_token: session.refreshToken,
+                }).catch(err => console.error("Logout backend call failed", err));
+            }
+
+            // 2. Clear local state
+            clearAuth();
+
+            // 3. Current session signout
+            await signOut({ callbackUrl: "/login", redirect: true });
+        } catch (error) {
+            console.error("Logout error:", error);
+            // Fallback redirect
+            router.push("/login");
+        }
+    };
 
     return (
         <aside
@@ -120,7 +149,21 @@ export function Sidebar() {
                 })}
             </nav>
 
-            <div className="p-4 border-t">
+            <div className="p-4 border-t space-y-4">
+                {/* Logout Button */}
+                <Button
+                    variant="ghost"
+                    className={cn(
+                        "w-full flex items-center justify-start text-muted-foreground hover:text-destructive hover:bg-destructive/10",
+                        !sidebarOpen && "justify-center px-0"
+                    )}
+                    onClick={handleLogout}
+                    title={!sidebarOpen ? "Logout" : undefined}
+                >
+                    <LogOut size={20} className={cn("shrink-0", sidebarOpen && "mr-3")} />
+                    {sidebarOpen && <span>Logout</span>}
+                </Button>
+
                 <div className={cn("flex items-center", !sidebarOpen && "justify-center")}>
                     <Avatar className="h-8 w-8">
                         <AvatarImage src="" />

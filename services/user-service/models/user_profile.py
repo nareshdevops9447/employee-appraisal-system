@@ -15,6 +15,9 @@ class UserProfile(db.Model):
     # Self-referential partial key for manager
     manager_id = db.Column(db.String(36), db.ForeignKey('user_profiles.id'), nullable=True)
     
+    # Azure Object ID for syncing
+    azure_oid = db.Column(db.String(36), unique=True, nullable=True, index=True)
+    
     employment_type = db.Column(db.String(20), nullable=False, default='full_time') 
     # full_time, part_time, contractor, volunteer
     
@@ -55,6 +58,7 @@ class UserProfile(db.Model):
             'department_id': self.department_id,
             'department_name': self.department_name,
             'manager_id': self.manager_id,
+            'azure_oid': self.azure_oid,
             'employment_type': self.employment_type,
             'start_date': self.start_date.isoformat() if self.start_date else None,
             'avatar_url': self.avatar_url,

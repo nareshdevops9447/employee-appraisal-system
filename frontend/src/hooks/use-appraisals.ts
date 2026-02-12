@@ -33,7 +33,7 @@ export function useActiveCycle() {
             // For now, fetching all and filtering, or specific endpoint if exists
             // In Phase 4 we made GET /cycles. Let's assume we filter or specific endpoint
             const { data } = await apiClient.get<AppraisalCycle[]>('/api/cycles');
-            return data.find(c => c.status === 'active');
+            return data.find((c: any) => c.status === 'active') || null;
         }
     })
 }
