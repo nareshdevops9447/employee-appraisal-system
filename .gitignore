@@ -45,3 +45,10 @@ build/
 .next/
 **/node_modules/
 **/.next/
+coverage/
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+employee-appraisal-system/
+{backend,frontend/
+
