@@ -66,7 +66,7 @@ export function TeamMemberCard({ member }: TeamMemberCardProps) {
 
                 <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Department</span>
-                    <span className="font-medium">{member.department_id || '-'}</span>
+                    <span className="font-medium">{member.department_name || '-'}</span>
                 </div>
 
                 {member.active_appraisal_status && (

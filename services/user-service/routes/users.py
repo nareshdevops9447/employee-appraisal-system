@@ -46,6 +46,7 @@ def sync_user():
     auth_user_id = data.get('auth_user_id')
     email = (data.get('email') or '').lower().strip()
     azure_oid = data.get('azure_oid')  # Extract Azure OID
+    avatar_url = data.get('avatar_url') # Extract Avatar URL
 
     if not auth_user_id or not email:
         return jsonify({'error': 'auth_user_id and email are required'}), 400
@@ -162,6 +163,12 @@ def sync_user():
                     user.manager_id = manager_id
                 if azure_oid:
                     user.azure_oid = azure_oid # Update OID if missing
+                
+                # Update avatar if provided
+                avatar_url = data.get('avatar_url')
+                if avatar_url:
+                    user.avatar_url = avatar_url
+                    
                 user.is_active = True
         else:
             # Create new profile
@@ -173,6 +180,7 @@ def sync_user():
                 department_id=department_id,
                 manager_id=manager_id,
                 azure_oid=azure_oid, # Save OID
+                avatar_url=data.get('avatar_url'), # Save avatar
                 employment_type='full_time',
                 start_date=date.today(),
                 is_active=True,
@@ -182,20 +190,43 @@ def sync_user():
 
         # ── 5. Process direct reports (create stubs if needed) ──
         direct_reports = data.get('direct_reports') or []
+        logger.info(f"Processing {len(direct_reports)} direct reports. Data: {direct_reports}")
         for report in direct_reports:
             report_email = (report.get('email') or '').lower().strip()
             if not report_email:
                 continue
+            
+            # Resolve department for the report
+            report_dept_name = report.get('department')
+            logger.info(f"Direct report {report_email} department: {report_dept_name}")
+            report_dept_id = None
+            if report_dept_name:
+                # Simple cache or query could work here. For now, query.
+                r_dept = Department.query.filter(Department.name.ilike(report_dept_name)).first()
+                if r_dept:
+                    report_dept_id = r_dept.id
+                else:
+                    # Auto-create if not exists
+                    r_dept = Department(name=report_dept_name)
+                    db.session.add(r_dept)
+                    db.session.flush()
+                    report_dept_id = r_dept.id
 
             report_profile = UserProfile.query.filter_by(email=report_email).first()
+            
             if report_profile:
                 # Update manager_id to point to this user
                 if report_profile.manager_id != auth_user_id:
                     report_profile.manager_id = auth_user_id
-                # Also update their OID if we have it and they don't
+                
+                # Update OID if missing
                 rpt_oid = report.get('azure_oid')
                 if rpt_oid and not report_profile.azure_oid:
                     report_profile.azure_oid = rpt_oid
+                
+                # Update Department if missing or changed (optional: strict sync?)
+                if report_dept_id and report_profile.department_id != report_dept_id:
+                    report_profile.department_id = report_dept_id
 
             else:
                 # Create stub for the direct report
@@ -212,8 +243,9 @@ def sync_user():
                     first_name=rpt_first,
                     last_name=rpt_last,
                     job_title=report.get('job_title'),
+                    department_id=report_dept_id, # Set Department
                     manager_id=auth_user_id,
-                    azure_oid=rpt_oid, # Save OID
+                    azure_oid=rpt_oid,
                     is_active=True,
                     start_date=date.today(),
                 )

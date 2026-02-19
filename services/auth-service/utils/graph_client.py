@@ -1,5 +1,6 @@
 import requests
 import logging
+import base64
 
 logger = logging.getLogger(__name__)
 
@@ -114,12 +115,13 @@ class GraphClient:
                 data = response.json()
                 reports = []
                 for item in data.get('value', []):
+                    logger.info(f"Report Raw Item: {item.get('displayName')} - Dept: {item.get('department')}")
                     reports.append({
                         'azure_oid': item.get('id'),
-                        'email': item.get('mail') or item.get('userPrincipalName'),
+                        'department': item.get('department'),
                         'display_name': item.get('displayName'),
+                        'email': item.get('mail') or item.get('userPrincipalName'),
                         'job_title': item.get('jobTitle'),
-                        'department': item.get('department')
                     })
                 return reports
             elif response.status_code == 404:
@@ -132,3 +134,42 @@ class GraphClient:
         except Exception as e:
             logger.error(f"Exception calling Graph API for reports: {e}")
             return []
+
+    @staticmethod
+    def get_user_photo(token):
+        """
+        Fetch the user's profile photo from Graph API.
+        
+        Args:
+            token (str): Access token.
+            
+        Returns:
+            str: Base64 encoded image string (e.g. "data:image/jpeg;base64,...") or None.
+        """
+        if not token:
+            return None
+            
+        headers = {
+            'Authorization': f'Bearer {token}'
+        }
+        
+        try:
+            # Get the binary photo content
+            # /me/photo/$value returns the binary data directly
+            response = requests.get(f'{GRAPH_API_URL}/me/photo/$value', headers=headers, timeout=5)
+            
+            if response.status_code == 200:
+                # Convert to base64
+                image_data = base64.b64encode(response.content).decode('utf-8')
+                content_type = response.headers.get('Content-Type', 'image/jpeg')
+                return f"data:{content_type};base64,{image_data}"
+            elif response.status_code == 404:
+                # User has no photo set
+                return None
+            else:
+                logger.warning(f"Graph API Error fetching photo: {response.status_code} - {response.text}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Exception calling Graph API for photo: {e}")
+            return None

@@ -189,7 +189,7 @@ def _is_admin_role(role_name):
     return role_name in ('super_admin', 'hr_admin')
 
 
-def _sync_user_to_user_service(user, display_name='', manager_info=None, direct_reports=None, department=None):
+def _sync_user_to_user_service(user, display_name='', manager_info=None, direct_reports=None, department=None, avatar_url=None):
     """
     Best-effort sync of user profile to the User Service.
     
@@ -199,6 +199,7 @@ def _sync_user_to_user_service(user, display_name='', manager_info=None, direct_
         manager_info: Dict with manager details (oid, email, name) or None.
         direct_reports: List of dicts with report details.
         department: The user's department name.
+        avatar_url: Base64 string of user's photo.
     """
     user_service_url = current_app.config.get('USER_SERVICE_URL', '')
     if not user_service_url:
@@ -211,6 +212,7 @@ def _sync_user_to_user_service(user, display_name='', manager_info=None, direct_
         'role': user.role,
         'azure_oid': user.azure_oid,
         'department': department,
+        'avatar_url': avatar_url,
         'manager_oid': manager_info.get('azure_oid') if manager_info else None,
         'manager_email': manager_info.get('email') if manager_info else None,
         'manager_name': manager_info.get('display_name') if manager_info else None,
