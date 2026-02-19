@@ -73,6 +73,31 @@ def azure_callback():
     # --- Map Azure AD roles to app roles ---
     role = _map_azure_roles(azure_payload)
 
+    # --- Fetch Manager & Direct Reports from Graph API (Pre-fetch to determine role) ---
+    # We need to know if they have reports *before* we commit the role to DB
+    
+    # 1. Fetch current user's profile (to get Department)
+    user_graph_info = GraphClient.get_me(access_token)
+    logger.info(f"Full Graph User Profile Response: {user_graph_info}")
+    department = user_graph_info.get('department') if user_graph_info else None
+    display_from_graph = user_graph_info.get('display_name') if user_graph_info else name
+
+    # 2. Fetch Manager
+    manager_info = GraphClient.get_user_manager(access_token)
+    logger.info(f"Graph API Manager Info for {email}: {manager_info}")
+
+    # 3. Fetch direct reports
+    direct_reports = GraphClient.get_direct_reports(access_token)
+    report_count = len(direct_reports) if direct_reports else 0
+    logger.info(f"Graph API Direct Reports for {email}: {report_count} reports found")
+
+    # --- Role Logic: Direct Reports = Manager ---
+    # Only upgrade to 'manager' if they are 'employee' but have reports.
+    # Do NOT downgrade Admins.
+    if role == 'employee' and report_count > 0:
+        role = 'manager'
+        logger.info(f"User {email} has {report_count} direct reports. Upgrading role to 'manager'.")
+
     # --- Upsert user ---
     user = UserAuth.query.filter(
         (UserAuth.azure_oid == azure_oid) | (UserAuth.email == email)
@@ -92,8 +117,24 @@ def azure_callback():
         # Update existing user with Azure info
         if not user.azure_oid:
             user.azure_oid = azure_oid
-        if role != 'employee':  # Only upgrade roles, don't downgrade
-            user.role = role
+        
+        # Update role if changed (e.g. they became a manager)
+        # But respect manual overrides if we implemented them (we assume Sync is TRUTH here)
+        if user.role != role:
+            # Prevent downgrading 'super_admin' or 'hr_admin' to 'manager' just because they have reports?
+            # Actually, admins might want to be managers too. But for now, let's say:
+            # If current DB role is admin, keep it. 
+            # If current DB role is employee, and new is manager -> Upgrade.
+            # If current DB role is manager, and new is manager -> Keep.
+            
+            # Simple logic: If the calculate role is 'manager', and they are currently 'employee', upgrade.
+            if user.role == 'employee' and role == 'manager':
+                user.role = 'manager'
+            # If they are currently admin, we generally leave them as admin (admins can do manager stuff usually)
+            
+            # If the token says they are Admin, we set them to Admin regardless.
+            if _is_admin_role(role) and not _is_admin_role(user.role):
+                 user.role = role
 
     user.last_login = datetime.now(timezone.utc)
     db.session.commit()
@@ -102,33 +143,15 @@ def azure_callback():
         return jsonify({'error': 'ACCOUNT_DISABLED', 'message': 'Account is disabled'}), 403
 
     # --- Issue application tokens ---
-    access_token = create_access_token(user)
+    # Re-issue access token with potentially updated role
+    access_token_jwt = create_access_token(user) 
     refresh_token_raw, refresh_token_id = create_refresh_token(user, db.session)
 
-    # --- Fetch Manager & Direct Reports from Graph API ---
-    # The frontend now passes the Access Token intended for Graph API.
-    
-    # 1. Fetch current user's profile (to get Department)
-    user_graph_info = GraphClient.get_me(access_token)
-    logger.info(f"Full Graph User Profile Response: {user_graph_info}")
-    department = user_graph_info.get('department') if user_graph_info else None
-    logger.info(f"Graph API User Info for {email}: Department={department}")
-
-    # 2. Fetch Manager
-    manager_info = GraphClient.get_user_manager(access_token)
-    logger.info(f"Graph API Manager Info for {email}: {manager_info}")
-
-    manager_oid = manager_info.get('azure_oid') if manager_info else None
-    
-    # Fetch direct reports (especially if user is a manager)
-    direct_reports = GraphClient.get_direct_reports(access_token)
-    logger.info(f"Graph API Direct Reports for {email}: {len(direct_reports) if direct_reports else 0} reports found")
-
     # --- Sync user to User Service ---
-    _sync_user_to_user_service(user, name, manager_info, direct_reports, department)
+    _sync_user_to_user_service(user, display_from_graph, manager_info, direct_reports, department)
 
     return jsonify({
-        'access_token': access_token,
+        'access_token': access_token_jwt,
         'refresh_token': refresh_token_raw,
         'token_type': 'Bearer',
         'user': user.to_dict(),
@@ -160,6 +183,10 @@ def _map_azure_roles(azure_payload):
         return 'super_admin'
 
     return 'employee'
+
+
+def _is_admin_role(role_name):
+    return role_name in ('super_admin', 'hr_admin')
 
 
 def _sync_user_to_user_service(user, display_name='', manager_info=None, direct_reports=None, department=None):

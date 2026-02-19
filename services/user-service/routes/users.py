@@ -32,6 +32,7 @@ def sync_user():
         "department": "Finance",
         "manager_oid": "manager-azure-oid",
         "manager_email": "manager@org.com",
+        "manager_email": "manager@org.com",
         "manager_name": "Manager Name",
         "direct_reports": [
             {"azure_oid": "...", "email": "...", "display_name": "...", "department": "...", "job_title": "..."}
@@ -44,6 +45,7 @@ def sync_user():
 
     auth_user_id = data.get('auth_user_id')
     email = (data.get('email') or '').lower().strip()
+    azure_oid = data.get('azure_oid')  # Extract Azure OID
 
     if not auth_user_id or not email:
         return jsonify({'error': 'auth_user_id and email are required'}), 400
@@ -79,10 +81,12 @@ def sync_user():
 
         if manager_oid or manager_email:
             # Look up manager by azure_oid first, then email
-            # Note: UserProfile doesn't store azure_oid, so we look up by email
-            # Auth service stores azure_oid; user-service uses auth_user_id as PK
             manager_profile = None
-            if manager_email:
+            
+            if manager_oid:
+                 manager_profile = UserProfile.query.filter_by(azure_oid=manager_oid).first()
+
+            if not manager_profile and manager_email:
                 manager_profile = UserProfile.query.filter_by(email=manager_email).first()
 
             if manager_profile:
@@ -91,23 +95,26 @@ def sync_user():
                 # Manager hasn't logged in yet — create a stub profile
                 manager_name = data.get('manager_name', '')
                 mgr_parts = manager_name.strip().split(' ', 1) if manager_name else ['', '']
-                mgr_first = mgr_parts[0] or manager_email.split('@')[0] if manager_email else 'Unknown'
+                mgr_first = mgr_parts[0] or (manager_email.split('@')[0] if manager_email else 'Unknown')
                 mgr_last = mgr_parts[1] if len(mgr_parts) > 1 else ''
 
+                # We need at least an email or an OID to create a stub
                 if manager_email:
                     import uuid
+                    new_mgr_id = str(uuid.uuid4())
                     manager_profile = UserProfile(
-                        id=str(uuid.uuid4()),  # Temp ID; will be updated when manager logs in
+                        id=new_mgr_id,
                         email=manager_email,
                         first_name=mgr_first,
                         last_name=mgr_last,
+                        azure_oid=manager_oid, # Save OID for future linking
                         is_active=True,
                         start_date=date.today(),
                     )
                     db.session.add(manager_profile)
                     db.session.flush()
                     manager_id = manager_profile.id
-                    logger.info(f"Created stub manager profile for: {manager_email}")
+                    logger.info(f"Created stub manager profile for: {manager_email} (OID: {manager_oid})")
 
         # ── 4. Upsert user profile ──
         user = UserProfile.query.get(auth_user_id)
@@ -136,6 +143,7 @@ def sync_user():
                     job_title=user.job_title,
                     department_id=department_id or user.department_id,
                     manager_id=manager_id or user.manager_id,
+                    azure_oid=azure_oid, # Ensure OID is carried over
                     employment_type=user.employment_type,
                     start_date=user.start_date or date.today(),
                     is_active=True,
@@ -152,6 +160,8 @@ def sync_user():
                     user.department_id = department_id
                 if manager_id:
                     user.manager_id = manager_id
+                if azure_oid:
+                    user.azure_oid = azure_oid # Update OID if missing
                 user.is_active = True
         else:
             # Create new profile
@@ -162,6 +172,7 @@ def sync_user():
                 last_name=last_name,
                 department_id=department_id,
                 manager_id=manager_id,
+                azure_oid=azure_oid, # Save OID
                 employment_type='full_time',
                 start_date=date.today(),
                 is_active=True,
@@ -181,6 +192,11 @@ def sync_user():
                 # Update manager_id to point to this user
                 if report_profile.manager_id != auth_user_id:
                     report_profile.manager_id = auth_user_id
+                # Also update their OID if we have it and they don't
+                rpt_oid = report.get('azure_oid')
+                if rpt_oid and not report_profile.azure_oid:
+                    report_profile.azure_oid = rpt_oid
+
             else:
                 # Create stub for the direct report
                 import uuid
@@ -188,6 +204,7 @@ def sync_user():
                 rpt_parts = rpt_name.strip().split(' ', 1) if rpt_name else ['', '']
                 rpt_first = rpt_parts[0] or report_email.split('@')[0]
                 rpt_last = rpt_parts[1] if len(rpt_parts) > 1 else ''
+                rpt_oid = report.get('azure_oid')
 
                 report_profile = UserProfile(
                     id=str(uuid.uuid4()),
@@ -196,6 +213,7 @@ def sync_user():
                     last_name=rpt_last,
                     job_title=report.get('job_title'),
                     manager_id=auth_user_id,
+                    azure_oid=rpt_oid, # Save OID
                     is_active=True,
                     start_date=date.today(),
                 )
