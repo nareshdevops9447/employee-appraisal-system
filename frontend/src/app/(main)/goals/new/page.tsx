@@ -3,15 +3,31 @@
 
 import { GoalForm } from "@/components/goals/goal-form";
 import { useCreateGoal } from "@/hooks/use-goals";
-import { useRouter } from "next/navigation";
+import { useTeamMembers } from "@/hooks/use-team";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 export default function CreateGoalPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const employeeIdParam = searchParams?.get('employee_id');
     const createGoal = useCreateGoal();
 
+    // Fetch team members to populate the assignment dropdown
+    const { data: teamMembers } = useTeamMembers();
+
     const handleSubmit = (data: any) => {
-        createGoal.mutate(data, {
+        // If employee_id is "myself", treat it as null/undefined (current user)
+        // If employee_id is selected from dropdown, use it
+        // If employeeIdParam is present (came from team page), use it
+        let targetEmployeeId = data.employee_id === "myself" ? undefined : data.employee_id;
+
+        if (!targetEmployeeId && employeeIdParam) {
+            targetEmployeeId = employeeIdParam;
+        }
+
+        const payload = { ...data, employee_id: targetEmployeeId };
+        createGoal.mutate(payload, {
             onSuccess: (newGoal) => {
                 router.push(`/goals/${newGoal.id}`);
             },
@@ -30,7 +46,12 @@ export default function CreateGoalPage() {
                     <CardDescription>Fill in the details for your new goal.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <GoalForm onSubmit={handleSubmit} isLoading={createGoal.isPending} />
+                    <GoalForm
+                        onSubmit={handleSubmit}
+                        isLoading={createGoal.isPending}
+                        employeeId={employeeIdParam}
+                        teamMembers={teamMembers}
+                    />
                 </CardContent>
             </Card>
         </div>

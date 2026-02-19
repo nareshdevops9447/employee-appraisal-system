@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/select";
 import { Play } from "lucide-react";
 import { useState } from "react";
+import { useDepartments } from "@/hooks/use-departments";
 
 const criteriaSchema = z.object({
     department_id: z.string().optional(),
@@ -45,6 +46,7 @@ interface ActivateCycleDialogProps {
 
 export function ActivateCycleDialog({ cycleId, onActivate, isSync = false }: ActivateCycleDialogProps) {
     const [open, setOpen] = useState(false);
+    const { data: departments } = useDepartments();
 
     const form = useForm<z.infer<typeof criteriaSchema>>({
         resolver: zodResolver(criteriaSchema),
@@ -147,10 +149,11 @@ export function ActivateCycleDialog({ cycleId, onActivate, isSync = false }: Act
                                         </FormControl>
                                         <SelectContent>
                                             <SelectItem value="all">All Departments</SelectItem>
-                                            {/* TODO: Fetch real departments */}
-                                            <SelectItem value="hr">HR</SelectItem>
-                                            <SelectItem value="engineering">Engineering</SelectItem>
-                                            <SelectItem value="sales">Sales</SelectItem>
+                                            {departments?.map((dept) => (
+                                                <SelectItem key={dept.id} value={dept.id}>
+                                                    {dept.name}
+                                                </SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
                                     <FormMessage />

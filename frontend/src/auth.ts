@@ -13,7 +13,7 @@ import MicrosoftEntraID from 'next-auth/providers/microsoft-entra-id';
 import type { Role } from '@/types/auth';
 
 const AUTH_SERVICE_URL =
-    process.env.AUTH_SERVICE_URL || 'http://localhost:5000/api';
+    process.env.AUTH_SERVICE_URL || 'http://localhost:5001';
 
 const clientId = process.env.AZURE_AD_CLIENT_ID ?? '';
 const clientSecret = process.env.AZURE_AD_CLIENT_SECRET ?? '';
@@ -27,7 +27,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             issuer: `https://login.microsoftonline.com/${process.env.AZURE_AD_TENANT_ID ?? ''}/v2.0`,
             authorization: {
                 params: {
-                    scope: 'openid profile email User.Read',
+                    scope: 'openid profile email offline_access https://graph.microsoft.com/User.Read',
                 },
             },
         }),
@@ -57,7 +57,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                         {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ id_token: idToken }),
+                            body: JSON.stringify({
+                                id_token: idToken,
+                                access_token: account.access_token
+                            }),
                         }
                     );
 

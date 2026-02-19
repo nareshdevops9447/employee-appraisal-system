@@ -2,6 +2,7 @@
 "use client";
 
 import { useCycleCompletion, useRatingDistribution, useGoalStatsReport, useAppraisalTrends, useDepartmentStats } from "@/hooks/use-reports";
+import { useDepartments } from "@/hooks/use-departments";
 import { RatingDistributionChart } from "@/components/reports/rating-chart";
 import { GoalStatusChart } from "@/components/reports/goal-status-chart";
 import { TrendChart } from "@/components/reports/trend-chart";
@@ -23,6 +24,7 @@ export default function ReportsPage() {
     const { data: goalStats, isLoading: goalStatsLoading } = useGoalStatsReport();
     const { data: trendStats } = useAppraisalTrends();
     const { data: departmentStats } = useDepartmentStats();
+    const { data: departments } = useDepartments();
 
     const [date, setDate] = useState<DateRange | undefined>({
         from: new Date(2025, 0, 20),
@@ -44,8 +46,11 @@ export default function ReportsPage() {
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All Departments</SelectItem>
-                            <SelectItem value="Engineering">Engineering</SelectItem>
-                            <SelectItem value="Sales">Sales</SelectItem>
+                            {departments?.map((dept) => (
+                                <SelectItem key={dept.id} value={dept.id}>
+                                    {dept.name}
+                                </SelectItem>
+                            ))}
                         </SelectContent>
                     </Select>
                     <Select defaultValue="current-cycle">

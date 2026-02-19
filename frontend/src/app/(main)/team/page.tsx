@@ -2,6 +2,7 @@
 "use client";
 
 import { useTeamMembers, TeamMember } from "@/hooks/use-team";
+import { useDepartments } from "@/hooks/use-departments";
 import { TeamMemberCard } from "@/components/team/team-member-card";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
@@ -31,6 +32,7 @@ export default function TeamPage() {
     const [search, setSearch] = useState("");
     const [department, setDepartment] = useState("all");
     const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
+    const { data: departments } = useDepartments();
 
     const { data: members, isLoading } = useTeamMembers({
         search: search || undefined,
@@ -63,10 +65,11 @@ export default function TeamPage() {
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All Departments</SelectItem>
-                            <SelectItem value="Engineering">Engineering</SelectItem>
-                            <SelectItem value="Sales">Sales</SelectItem>
-                            <SelectItem value="Marketing">Marketing</SelectItem>
-                            <SelectItem value="HR">HR</SelectItem>
+                            {departments?.map((dept) => (
+                                <SelectItem key={dept.id} value={dept.id}>
+                                    {dept.name}
+                                </SelectItem>
+                            ))}
                         </SelectContent>
                     </Select>
                     <Select defaultValue="name">

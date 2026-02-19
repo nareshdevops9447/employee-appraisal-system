@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function EditGoalPage() {
     const router = useRouter();
     const params = useParams();
-    const id = params.id as string;
+    const id = (params?.id as string) || '';
     const { data: goal, isLoading: goalLoading } = useGoal(id);
     const updateGoal = useUpdateGoal();
 

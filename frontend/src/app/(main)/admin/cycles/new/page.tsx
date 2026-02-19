@@ -19,7 +19,7 @@ import { format } from "date-fns";
 
 const cycleSchema = z.object({
     name: z.string().min(1, "Name is required"),
-    type: z.enum(["annual", "quarterly", "probation"]),
+    type: z.enum(["annual", "mid_year", "probation"]),
     startDate: z.date(),
     endDate: z.date(),
 });
@@ -91,7 +91,7 @@ export default function CreateCyclePage() {
                                             </FormControl>
                                             <SelectContent>
                                                 <SelectItem value="annual">Annual</SelectItem>
-                                                <SelectItem value="quarterly">Quarterly</SelectItem>
+                                                <SelectItem value="mid_year">Half Yearly</SelectItem>
                                                 <SelectItem value="probation">Probation</SelectItem>
                                             </SelectContent>
                                         </Select>

@@ -8,11 +8,9 @@ import uuid
 
 # Configuration
 DEPARTMENTS = [
-    ('Fundraising', 'Responsible for donor relations and grants'),
     ('Finance', 'Manages budget, payroll, and accounting'),
-    ('Programs', 'Delivers core charity services to beneficiaries'),
-    ('HR', 'Human resources and volunteer management'),
     ('IT', 'Technology infrastructure and support'),
+    ('HR', 'Human resources and volunteer management'),
 ]
 
 FIRST_NAMES = [
@@ -32,11 +30,9 @@ LAST_NAMES = [
 ]
 
 JOB_TITLES = {
-    'Fundraising': ['Grants Coordinator', 'Donor Relations Officer', 'Fundraising Assistant', 'Major Gifts Officer', 'Events Coordinator'],
     'Finance': ['Finance Officer', 'Accounts Assistant', 'Budget Analyst', 'Payroll Coordinator', 'Finance Assistant'],
-    'Programs': ['Programme Coordinator', 'Field Officer', 'Community Liaison', 'Outreach Worker', 'Beneficiary Support Officer'],
-    'HR': ['HR Officer', 'Recruitment Coordinator', 'Volunteer Coordinator', 'L&D Assistant', 'HR Assistant'],
     'IT': ['Systems Administrator', 'IT Support Analyst', 'Web Developer', 'Data Analyst', 'IT Helpdesk Officer'],
+    'HR': ['HR Officer', 'Recruitment Coordinator', 'Volunteer Coordinator', 'L&D Assistant', 'HR Assistant'],
 }
 
 _used_names = set()

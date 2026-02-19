@@ -13,11 +13,12 @@ export function useTeamMembers(params?: { department_id?: string; search?: strin
     return useQuery({
         queryKey: ['team', params],
         queryFn: async () => {
-            // If manager, /api/users/direct-reports
-            // If HR, /api/users with department filter
-            // For now, let's assume a unified endpoint or use filtering
             const { data } = await apiClient.get<TeamMember[]>('/api/users/team', { params });
-            return data;
+            // Map full_name → name for component compatibility
+            return data.map((m) => ({
+                ...m,
+                name: m.name || m.full_name || `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.email,
+            }));
         },
     });
 }

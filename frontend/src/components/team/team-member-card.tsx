@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Mail, MoreHorizontal, User } from "lucide-react";
+import { Mail, MoreHorizontal, User, Plus } from "lucide-react";
 import Link from "next/link";
 import {
     DropdownMenu,
@@ -32,7 +32,7 @@ export function TeamMemberCard({ member }: TeamMemberCardProps) {
                         <AvatarFallback>{member.name?.[0]}</AvatarFallback>
                     </Avatar>
                     <div className="space-y-1">
-                        <h3 className="font-semibold leading-none">{member.name}</h3>
+                        <h3 className="font-semibold leading-none">{member.name && member.name !== 'Employee' ? member.name : member.email}</h3>
                         <p className="text-sm text-muted-foreground">{member.job_title || 'Employee'}</p>
                     </div>
                 </div>
@@ -52,6 +52,12 @@ export function TeamMemberCard({ member }: TeamMemberCardProps) {
                         </DropdownMenuItem>
                         <DropdownMenuItem asChild>
                             <Link href={`/goals?employee_id=${member.id}`}>View Goals</Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem asChild>
+                            <Link href={`/goals/new?employee_id=${member.id}`}>
+                                <Plus className="mr-2 h-4 w-4" /> Set Goal
+                            </Link>
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>

@@ -93,11 +93,9 @@ export function useDepartmentStats() {
         queryKey: ['reports', 'department-stats'],
         queryFn: async () => {
             return [
-                { department: 'Sales', avg_rating: 4.2, completion_rate: 85 },
-                { department: 'Engineering', avg_rating: 3.9, completion_rate: 72 },
-                { department: 'Marketing', avg_rating: 4.5, completion_rate: 90 },
+                { department: 'Finance', avg_rating: 4.2, completion_rate: 85 },
+                { department: 'IT', avg_rating: 3.9, completion_rate: 72 },
                 { department: 'HR', avg_rating: 4.1, completion_rate: 95 },
-                { department: 'Product', avg_rating: 4.0, completion_rate: 78 },
             ] as DepartmentStats[];
         }
     });

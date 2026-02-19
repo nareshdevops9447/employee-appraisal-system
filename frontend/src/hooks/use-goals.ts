@@ -4,7 +4,7 @@ import apiClient from '@/lib/api-client';
 import { Goal } from '@/types/goal';
 import { toast } from 'sonner';
 
-export function useGoals(params?: { status?: string; category?: string; priority?: string }) {
+export function useGoals(params?: { status?: string; category?: string; priority?: string; scope?: string; employee_id?: string }) {
     return useQuery({
         queryKey: ['goals', params],
         queryFn: async () => {
@@ -28,7 +28,7 @@ export function useGoal(id: string) {
 export function useCreateGoal() {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: async (goal: Partial<Goal>) => {
+        mutationFn: async (goal: Partial<Goal> & { employee_id?: string | null }) => {
             const { data } = await apiClient.post<Goal>('/api/goals', goal);
             return data;
         },

@@ -1,17 +1,15 @@
-
 "use client";
 
-import { useGoal, useUpdateGoal } from "@/hooks/use-goals";
-import { useParams } from "next/navigation";
+import { useGoal } from "@/hooks/use-goals";
+import { useParams, useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Calendar, CheckCircle2, MoreVertical, Pencil, Target, User } from "lucide-react";
 import Link from "next/link";
-import { GoalTimeline } from "@/components/goals/goal-timeline";
 import { KeyResultItem } from "@/components/goals/key-result-item";
 import {
     DropdownMenu,
@@ -19,17 +17,22 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { KeyResult } from "@/types/goal";
 import { useSession } from "next-auth/react";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useAddKeyResult } from "@/hooks/use-key-results";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { GoalApprovalActions } from "@/components/goals/goal-approval-actions";
+import { GoalCommentTimeline } from "@/components/goals/goal-comment-timeline";
+import { GoalAuditTrail } from "@/components/goals/goal-audit-trail";
+import { GoalVersionHistory } from "@/components/goals/goal-version-history";
+import { useUser } from "@/hooks/use-user";
 
 export default function GoalDetailPage() {
     const params = useParams();
-    const id = params.id as string;
+    const router = useRouter();
+    const id = (params?.id as string) || '';
     const { data: goal, isLoading } = useGoal(id);
     const { data: session } = useSession();
 
@@ -37,6 +40,8 @@ export default function GoalDetailPage() {
     const isOwner = session?.user?.id === goal?.employee_id;
     // const isManager = ... (need manager check logic)
     const isOwnerOrManager = isOwner; // simplify for now
+
+    const { data: assignedUser } = useUser(goal?.employee_id);
 
     if (isLoading) return <div className="space-y-6"><Skeleton className="h-12 w-1/2" /><Skeleton className="h-64 w-full" /></div>;
     if (!goal) return <div>Goal not found</div>;
@@ -51,20 +56,19 @@ export default function GoalDetailPage() {
                         <Badge variant={goal.priority === 'high' || goal.priority === 'critical' ? 'destructive' : 'secondary'} className="capitalize">
                             {goal.priority}
                         </Badge>
-                        <Badge variant={goal.status === 'completed' ? 'default' : 'outline'} className="capitalize">
-                            {goal.status.replace('_', ' ')}
+                        <Badge variant={goal.approval_status === 'approved' ? 'default' : 'outline'} className="capitalize">
+                            {goal.approval_status?.replace('_', ' ')}
                         </Badge>
                     </div>
                     <h1 className="text-3xl font-bold tracking-tight">{goal.title}</h1>
                 </div>
                 <div className="flex items-center gap-2">
-                    {/* Manager Approval Actions */}
-                    {/* TODO: Add proper manager check using session/role */}
-                    {goal.approval_status === 'pending' && (
-                        <div className="flex gap-2 mr-2">
-                            <ApprovalActions goalId={goal.id} />
-                        </div>
-                    )}
+                    {/* Approval Actions */}
+                    <GoalApprovalActions
+                        goal={goal}
+                        currentUserId={session?.user?.id || ''}
+                        onEditClick={() => router.push(`/goals/${goal.id}/edit`)}
+                    />
 
                     {isOwnerOrManager && (
                         <Button variant="outline" size="sm" asChild>
@@ -122,14 +126,14 @@ export default function GoalDetailPage() {
                         </CardContent>
                     </Card>
 
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Activity & Comments</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <GoalTimeline goalId={goal.id} />
-                        </CardContent>
-                    </Card>
+                    {/* Timeline & Comments */}
+                    <GoalCommentTimeline
+                        goalId={goal.id}
+                        canComment={true}
+                        currentUserId={session?.user?.id || ''}
+                    />
+
+                    <GoalAuditTrail goalId={goal.id} />
                 </div>
 
                 {/* Right Column: Meta Info */}
@@ -158,7 +162,12 @@ export default function GoalDetailPage() {
                                 <User className="w-4 h-4 text-muted-foreground" />
                                 <div>
                                     <p className="font-medium">Assigned To</p>
-                                    <p className="text-muted-foreground">{goal.employee_id}</p> {/* Fetch name if possible */}
+                                    <p className="text-muted-foreground">
+                                        {assignedUser
+                                            ? (assignedUser.name || assignedUser.email || goal.employee_id)
+                                            : goal.employee_id
+                                        }
+                                    </p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-2">
@@ -170,6 +179,10 @@ export default function GoalDetailPage() {
                             </div>
                         </CardContent>
                     </Card>
+
+                    {goal.version_number > 1 && (
+                        <GoalVersionHistory goalId={goal.id} currentVersion={goal.version_number} />
+                    )}
                 </div>
             </div>
         </div>
@@ -227,28 +240,5 @@ function AddKeyResultDialog({ goalId }: { goalId: string }) {
                 </div>
             </DialogContent>
         </Dialog>
-    )
-}
-
-function ApprovalActions({ goalId }: { goalId: string }) {
-    const updateGoal = useUpdateGoal();
-
-    const handleApprove = () => {
-        updateGoal.mutate({ id: goalId, data: { approval_status: 'approved' } });
-    };
-
-    const handleReject = () => {
-        updateGoal.mutate({ id: goalId, data: { approval_status: 'revision_requested' } });
-    };
-
-    return (
-        <>
-            <Button size="sm" variant="default" className="bg-green-600 hover:bg-green-700" onClick={handleApprove} disabled={updateGoal.isPending}>
-                Approve
-            </Button>
-            <Button size="sm" variant="outline" className="text-destructive hover:bg-destructive/10" onClick={handleReject} disabled={updateGoal.isPending}>
-                Request Revision
-            </Button>
-        </>
     )
 }

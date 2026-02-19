@@ -68,38 +68,14 @@ const navItems = [
 ];
 
 
-import { signOut } from "next-auth/react";
-import apiClient from "@/lib/api-client";
-import { useRouter } from "next/navigation";
+import { useLogout } from "@/hooks/use-logout";
 
 export function Sidebar() {
     const pathname = usePathname();
-    const router = useRouter();
     const { data: session } = useSession();
     const { sidebarOpen, toggleSidebar } = useUIStore();
-    const { clearAuth } = useAuthStore();
     const userRole = session?.user?.role || "employee";
-
-    const handleLogout = async () => {
-        try {
-            // 1. Revoke token on backend (fire and forget to avoid blocking UI)
-            if (session?.refreshToken) {
-                await apiClient.post("/auth/logout", {
-                    refresh_token: session.refreshToken,
-                }).catch(err => console.error("Logout backend call failed", err));
-            }
-
-            // 2. Clear local state
-            clearAuth();
-
-            // 3. Current session signout
-            await signOut({ callbackUrl: "/login", redirect: true });
-        } catch (error) {
-            console.error("Logout error:", error);
-            // Fallback redirect
-            router.push("/login");
-        }
-    };
+    const logout = useLogout();
 
     return (
         <aside
@@ -127,7 +103,7 @@ export function Sidebar() {
             <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto">
                 {navItems.map((item) => {
                     if (!item.roles.includes(userRole)) return null;
-                    const isActive = pathname.startsWith(item.href);
+                    const isActive = pathname ? pathname.startsWith(item.href) : false;
 
                     return (
                         <Link
@@ -157,7 +133,7 @@ export function Sidebar() {
                         "w-full flex items-center justify-start text-muted-foreground hover:text-destructive hover:bg-destructive/10",
                         !sidebarOpen && "justify-center px-0"
                     )}
-                    onClick={handleLogout}
+                    onClick={logout}
                     title={!sidebarOpen ? "Logout" : undefined}
                 >
                     <LogOut size={20} className={cn("shrink-0", sidebarOpen && "mr-3")} />

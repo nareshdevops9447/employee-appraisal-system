@@ -41,7 +41,8 @@ def azure_callback():
       - { "access_token": "<azure-access-token>" }
     """
     data = request.get_json(silent=True) or {}
-    id_token = data.get('id_token') or data.get('access_token')
+    id_token = data.get('id_token')
+    access_token = data.get('access_token')
 
     if not id_token:
         return jsonify({
@@ -104,19 +105,27 @@ def azure_callback():
     access_token = create_access_token(user)
     refresh_token_raw, refresh_token_id = create_refresh_token(user, db.session)
 
-    # --- Fetch Manager from Graph API ---
-    # We use the incoming id_token/access_token. 
-    # NOTE: The id_token might not work for Graph API calls if it's just an ID token.
-    # Usually we need an access token for Graph.
-    # The frontend should pass the Access Token intended for Graph API, or we rely on OBO.
-    # If the frontend passes 'access_token' in `data`, use that. If `id_token`, we might fail.
-    # We'll try using the token we received.
-    incoming_token = data.get('access_token') or id_token
-    manager_info = GraphClient.get_user_manager(incoming_token)
-    manager_oid = manager_info.get('azure_oid') if manager_info else None
+    # --- Fetch Manager & Direct Reports from Graph API ---
+    # The frontend now passes the Access Token intended for Graph API.
+    
+    # 1. Fetch current user's profile (to get Department)
+    user_graph_info = GraphClient.get_me(access_token)
+    logger.info(f"Full Graph User Profile Response: {user_graph_info}")
+    department = user_graph_info.get('department') if user_graph_info else None
+    logger.info(f"Graph API User Info for {email}: Department={department}")
 
-    # --- Optionally sync user to User Service ---
-    _sync_user_to_user_service(user, name, manager_oid)
+    # 2. Fetch Manager
+    manager_info = GraphClient.get_user_manager(access_token)
+    logger.info(f"Graph API Manager Info for {email}: {manager_info}")
+
+    manager_oid = manager_info.get('azure_oid') if manager_info else None
+    
+    # Fetch direct reports (especially if user is a manager)
+    direct_reports = GraphClient.get_direct_reports(access_token)
+    logger.info(f"Graph API Direct Reports for {email}: {len(direct_reports) if direct_reports else 0} reports found")
+
+    # --- Sync user to User Service ---
+    _sync_user_to_user_service(user, name, manager_info, direct_reports, department)
 
     return jsonify({
         'access_token': access_token,
@@ -153,24 +162,40 @@ def _map_azure_roles(azure_payload):
     return 'employee'
 
 
-def _sync_user_to_user_service(user, display_name='', manager_oid=None):
-    """Best-effort sync of user profile to the User Service."""
+def _sync_user_to_user_service(user, display_name='', manager_info=None, direct_reports=None, department=None):
+    """
+    Best-effort sync of user profile to the User Service.
+    
+    Args:
+        user: The UserAuth model instance.
+        display_name: The user's display name from Azure.
+        manager_info: Dict with manager details (oid, email, name) or None.
+        direct_reports: List of dicts with report details.
+        department: The user's department name.
+    """
     user_service_url = current_app.config.get('USER_SERVICE_URL', '')
     if not user_service_url:
         return
 
+    payload = {
+        'auth_user_id': user.id,
+        'email': user.email,
+        'display_name': display_name,
+        'role': user.role,
+        'azure_oid': user.azure_oid,
+        'department': department,
+        'manager_oid': manager_info.get('azure_oid') if manager_info else None,
+        'manager_email': manager_info.get('email') if manager_info else None,
+        'manager_name': manager_info.get('display_name') if manager_info else None,
+        'direct_reports': direct_reports or []
+    }
+
     try:
+        logger.info(f"Syncing user to User Service. Payload: {payload}")
         http_requests.post(
             f'{user_service_url}/api/users/sync',
-            json={
-                'auth_user_id': user.id,
-                'email': user.email,
-                'display_name': display_name,
-                'role': user.role,
-                'azure_oid': user.azure_oid,
-                'manager_oid': manager_oid
-            },
-            timeout=5,
+            json=payload,
+            timeout=10,  # Increased timeout as this might involve multiple DB writes
         )
     except Exception as e:
         logger.warning('Failed to sync user to User Service: %s', e)

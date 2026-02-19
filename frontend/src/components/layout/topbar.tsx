@@ -1,7 +1,8 @@
 
 "use client";
 
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
+import { useLogout } from "@/hooks/use-logout";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -14,9 +15,11 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Bell, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { NotificationBell } from "@/components/goals/notification-bell";
 
 export function Topbar() {
     const { data: session } = useSession();
+    const logout = useLogout();
 
     return (
         <header className="sticky top-0 z-30 flex h-16 w-full items-center gap-4 border-b bg-background px-6">
@@ -32,12 +35,9 @@ export function Topbar() {
                     </div>
                 </form>
             </div>
+
             <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon" className="relative">
-                    <Bell className="h-5 w-5" />
-                    <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-red-600 ring-2 ring-background" />
-                    <span className="sr-only">Notifications</span>
-                </Button>
+                <NotificationBell />
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <Button variant="ghost" className="relative h-9 w-9 rounded-full">
@@ -64,12 +64,12 @@ export function Topbar() {
                             Settings
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => signOut({ callbackUrl: "/login" })}>
+                        <DropdownMenuItem onClick={logout}>
                             Log out
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
             </div>
-        </header>
+        </header >
     );
 }

@@ -9,6 +9,7 @@ class GoalComment(db.Model):
     goal_id = db.Column(db.String(36), db.ForeignKey('goals.id'), nullable=False)
     
     author_id = db.Column(db.String(36), nullable=False)
+    created_by_role = db.Column(db.String(50)) # 'manager' or 'employee'
     content = db.Column(db.Text, nullable=False)
     
     # enum: 'update', 'feedback', 'blocker', 'achievement'

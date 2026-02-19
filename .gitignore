@@ -50,5 +50,7 @@ htmlcov/
 .pytest_cache/
 .mypy_cache/
 employee-appraisal-system/
-{backend,frontend/
+backend/
+frontend/
+
 

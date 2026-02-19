@@ -117,14 +117,31 @@ def create_app(config_name=None):
             headers.update(extra_headers)
 
         try:
-            resp = http_requests.request(
-                method=request.method,
-                url=url,
-                headers=headers,
-                json=request.get_json(silent=True, force=True),
-                params=request.args,
-                timeout=30,
-            )
+            content_type = request.content_type or ''
+
+            if 'multipart/form-data' in content_type:
+                # Forward file uploads: stream files + form fields
+                files = {k: (f.filename, f.stream, f.content_type)
+                         for k, f in request.files.items()}
+                resp = http_requests.request(
+                    method=request.method,
+                    url=url,
+                    headers={k: v for k, v in headers.items()
+                             if k.lower() != 'content-type'},
+                    files=files,
+                    data=request.form.to_dict(),
+                    params=request.args,
+                    timeout=60,
+                )
+            else:
+                resp = http_requests.request(
+                    method=request.method,
+                    url=url,
+                    headers=headers,
+                    json=request.get_json(silent=True, force=True),
+                    params=request.args,
+                    timeout=30,
+                )
 
             excluded = {'content-encoding', 'content-length',
                         'transfer-encoding', 'connection'}
@@ -199,6 +216,11 @@ def create_app(config_name=None):
     @app.route('/api/goals', defaults={'path': ''}, methods=['GET', 'POST'])
     def goals_proxy(path):
         return _proxy_protected('goals', f'/api/goals/{path}' if path else '/api/goals')
+
+    @app.route('/api/notifications/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
+    @app.route('/api/notifications', defaults={'path': ''}, methods=['GET', 'POST'])
+    def notifications_proxy(path):
+        return _proxy_protected('goals', f'/api/notifications/{path}' if path else '/api/notifications')
 
     return app
 

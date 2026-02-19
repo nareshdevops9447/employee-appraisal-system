@@ -30,6 +30,7 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Goal } from "@/types/goal";
 import { useFieldArray } from "react-hook-form";
+import { TeamMember } from "@/hooks/use-team";
 
 const goalFormSchema = z.object({
     title: z.string().min(5, "Title must be at least 5 characters").max(200),
@@ -38,6 +39,7 @@ const goalFormSchema = z.object({
     priority: z.enum(['low', 'medium', 'high', 'critical']),
     start_date: z.date(),
     target_date: z.date(),
+    employee_id: z.string().optional(),
     key_results: z.array(z.object({
         title: z.string().min(3, "Key Result title is required"),
         target_value: z.number().min(1),
@@ -52,9 +54,11 @@ interface GoalFormProps {
     initialData?: Goal;
     onSubmit: (data: GoalFormValues) => void;
     isLoading?: boolean;
+    employeeId?: string | null;
+    teamMembers?: TeamMember[];
 }
 
-export function GoalForm({ initialData, onSubmit, isLoading }: GoalFormProps) {
+export function GoalForm({ initialData, onSubmit, isLoading, employeeId, teamMembers }: GoalFormProps) {
     const form = useForm<GoalFormValues>({
         resolver: zodResolver(goalFormSchema),
         defaultValues: {
@@ -64,6 +68,7 @@ export function GoalForm({ initialData, onSubmit, isLoading }: GoalFormProps) {
             priority: initialData?.priority || "medium",
             start_date: initialData?.start_date ? new Date(initialData.start_date) : new Date(),
             target_date: initialData?.target_date ? new Date(initialData.target_date) : undefined,
+            employee_id: employeeId || initialData?.employee_id || undefined,
             key_results: initialData?.key_results?.map(kr => ({
                 title: kr.title,
                 target_value: kr.target_value,
@@ -78,11 +83,51 @@ export function GoalForm({ initialData, onSubmit, isLoading }: GoalFormProps) {
         name: "key_results",
     });
 
+    const handleSubmit = (data: GoalFormValues) => {
+        // Sanitize "myself" value to undefined
+        const payload = { ...data };
+        if (payload.employee_id === "myself") {
+            payload.employee_id = undefined;
+        }
+        onSubmit(payload);
+    };
+
     return (
         <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-8">
                 <div className="grid gap-6 md:grid-cols-2">
                     <div className="space-y-6">
+                        {teamMembers && teamMembers.length > 0 && (
+                            <FormField
+                                control={form.control}
+                                name="employee_id"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Assign To</FormLabel>
+                                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                            <FormControl>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Select team member (Optional)" />
+                                                </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                <SelectItem value="myself">Myself</SelectItem>
+                                                {teamMembers.map(member => (
+                                                    <SelectItem key={member.id} value={member.id}>
+                                                        {member.name || member.email}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <FormDescription>
+                                            Leave blank or select "Myself" to assign to yourself.
+                                        </FormDescription>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                        )}
+
                         <FormField
                             control={form.control}
                             name="title"

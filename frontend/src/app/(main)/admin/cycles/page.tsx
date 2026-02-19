@@ -1,55 +1,58 @@
-
 "use client";
 
-import { useCycles, useActivateCycle, useStopCycle, AppraisalCycle } from "@/hooks/use-cycles";
+import { useCycles, useActivateCycle, useStopCycle, useDeleteCycle } from "@/hooks/use-cycles";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, PauseCircle } from "lucide-react";
 import Link from "next/link";
+import { Plus, Play, Square, Loader2, Pencil, Trash2 } from "lucide-react";
 import { format } from "date-fns";
-import { Skeleton } from "@/components/ui/skeleton";
-import { ActivateCycleDialog } from "@/components/admin/activate-cycle-dialog";
 import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-    AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-
-function formatDate(dateString: string) {
-    if (!dateString) return 'N/A';
-    try {
-        return format(new Date(dateString), 'MMM d, yyyy');
-    } catch (e) {
-        return 'Invalid Date';
-    }
-}
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
+import { toast } from "sonner";
 
 export default function CyclesPage() {
     const { data: cycles, isLoading } = useCycles();
     const activateCycle = useActivateCycle();
     const stopCycle = useStopCycle();
+    const deleteCycle = useDeleteCycle();
 
-    const handleActivate = (id: string, criteria: any) => {
-        activateCycle.mutate({ id, criteria });
+    const handleActivate = (id: string) => {
+        activateCycle.mutate({ id });
     };
 
     const handleStop = (id: string) => {
-        stopCycle.mutate(id);
+        if (confirm("Are you sure you want to stop this cycle?")) {
+            stopCycle.mutate(id);
+        }
     };
+
+    const handleDelete = (id: string) => {
+        if (confirm("Are you sure you want to delete this cycle? This action cannot be undone.")) {
+            deleteCycle.mutate(id, {
+                onError: (error: any) => {
+                    toast.error(error.response?.data?.message || "Failed to delete cycle");
+                }
+            });
+        }
+    };
+
+    if (isLoading) {
+        return <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+    }
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center">
+            <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">Appraisal Cycles</h1>
-                    <p className="text-muted-foreground">Manage review periods and cycles.</p>
+                    <p className="text-muted-foreground">Manage performance review cycles.</p>
                 </div>
                 <Button asChild>
                     <Link href="/admin/cycles/new">
@@ -58,85 +61,107 @@ export default function CyclesPage() {
                 </Button>
             </div>
 
-            {isLoading ? (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {[1, 2, 3].map((i) => (
-                        <Skeleton key={i} className="h-[200px] w-full" />
-                    ))}
-                </div>
-            ) : cycles?.length === 0 ? (
-                <div className="text-center py-12 bg-muted/20 rounded-lg">
-                    <p className="text-muted-foreground">No appraisal cycles found.</p>
-                    <Button variant="link" asChild className="mt-2">
-                        <Link href="/admin/cycles/new">Create your first cycle</Link>
-                    </Button>
-                </div>
-            ) : (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {cycles?.map((cycle) => (
-                        <Card key={cycle.id}>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-lg font-semibold">{cycle.name}</CardTitle>
-                                <Badge variant={cycle.status === 'active' ? 'default' : cycle.status === 'completed' ? 'secondary' : 'outline'}>
-                                    {cycle.status}
-                                </Badge>
-                            </CardHeader>
-                            <CardContent className="pt-4 space-y-4">
-                                <div className="text-sm text-muted-foreground">
-                                    <p>Type: <span className="capitalize">{cycle.type}</span></p>
-                                    <p>
-                                        {formatDate(cycle.startDate)} - {formatDate(cycle.endDate)}
-                                    </p>
-                                </div>
+            <Card>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Name</TableHead>
+                            <TableHead>Type</TableHead>
+                            <TableHead>Dates</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {cycles?.map((cycle: any) => (
+                            <TableRow key={cycle.id}>
+                                <TableCell className="font-medium">{cycle.name}</TableCell>
+                                <TableCell className="capitalize">
+                                    {(cycle.cycle_type || cycle.type || 'annual').replace('_', ' ')}
+                                </TableCell>
+                                <TableCell>
+                                    {cycle.start_date || cycle.startDate ? format(new Date(cycle.start_date || cycle.startDate), "MMM d, yyyy") : 'N/A'} -{" "}
+                                    {cycle.end_date || cycle.endDate ? format(new Date(cycle.end_date || cycle.endDate), "MMM d, yyyy") : 'N/A'}
+                                </TableCell>
+                                <TableCell>
+                                    <Badge variant={cycle.status === "active" ? "default" : "secondary"}>
+                                        {cycle.status}
+                                    </Badge>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                    <div className="flex justify-end gap-2">
+                                        {/* Edit Action - Always available */}
+                                        <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            asChild
+                                        >
+                                            <Link href={`/admin/cycles/${cycle.id}/edit`}>
+                                                <Pencil className="h-4 w-4" />
+                                                <span className="sr-only">Edit</span>
+                                            </Link>
+                                        </Button>
 
-                                <div className="flex gap-2 pt-2">
-                                    {cycle.status === 'draft' && (
-                                        <>
-                                            <ActivateCycleDialog
-                                                cycleId={cycle.id}
-                                                onActivate={handleActivate}
-                                            />
-                                            <Button variant="outline" size="sm" asChild>
-                                                <Link href={`/admin/cycles/${cycle.id}/edit`}>
-                                                    <Edit className="mr-2 h-3 w-3" /> Edit
-                                                </Link>
+                                        {/* Status-based Actions */}
+                                        {cycle.status === "draft" && (
+                                            <>
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => handleActivate(cycle.id)}
+                                                    disabled={activateCycle.isPending}
+                                                >
+                                                    <Play className="mr-2 h-4 w-4" /> Activate
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    className="text-destructive hover:text-destructive"
+                                                    onClick={() => handleDelete(cycle.id)}
+                                                    disabled={deleteCycle.isPending}
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                    <span className="sr-only">Delete</span>
+                                                </Button>
+                                            </>
+                                        )}
+                                        {cycle.status === "active" && (
+                                            <Button
+                                                size="sm"
+                                                variant="destructive"
+                                                onClick={() => handleStop(cycle.id)}
+                                                disabled={stopCycle.isPending}
+                                            >
+                                                <Square className="mr-2 h-4 w-4" /> Stop
                                             </Button>
-                                        </>
-                                    )}
-                                    {cycle.status === 'active' && (
-                                        <>
-                                            <ActivateCycleDialog
-                                                cycleId={cycle.id}
-                                                onActivate={handleActivate}
-                                                isSync={true}
-                                            />
-                                            <AlertDialog>
-                                                <AlertDialogTrigger asChild>
-                                                    <Button variant="destructive" size="sm">
-                                                        <PauseCircle className="mr-2 h-3 w-3" /> Stop
-                                                    </Button>
-                                                </AlertDialogTrigger>
-                                                <AlertDialogContent>
-                                                    <AlertDialogHeader>
-                                                        <AlertDialogTitle>Stop Cycle?</AlertDialogTitle>
-                                                        <AlertDialogDescription>
-                                                            This will revert the cycle to "Draft" status. You can edit it and re-activate later. Existing appraisals will remain but may be paused.
-                                                        </AlertDialogDescription>
-                                                    </AlertDialogHeader>
-                                                    <AlertDialogFooter>
-                                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                        <AlertDialogAction onClick={() => handleStop(cycle.id)}>Stop Cycle</AlertDialogAction>
-                                                    </AlertDialogFooter>
-                                                </AlertDialogContent>
-                                            </AlertDialog>
-                                        </>
-                                    )}
-                                </div>
-                            </CardContent>
-                        </Card>
-                    ))}
-                </div>
-            )}
+                                        )}
+                                        {/* Allow delete for completed? Maybe, if safe. For now, only draft or we check backend error. */}
+                                        {cycle.status === "completed" && (
+                                            <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                className="text-destructive hover:text-destructive"
+                                                onClick={() => handleDelete(cycle.id)}
+                                                disabled={deleteCycle.isPending}
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                                <span className="sr-only">Delete</span>
+                                            </Button>
+                                        )}
+                                    </div>
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                        {(!cycles || cycles.length === 0) && (
+                            <TableRow>
+                                <TableCell colSpan={5} className="text-center h-24 text-muted-foreground">
+                                    No cycles found. Create one to get started.
+                                </TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </Card>
         </div>
     );
 }

@@ -17,8 +17,14 @@ class Goal(db.Model):
     # enum: 'low', 'medium', 'high', 'critical'
     priority = db.Column(db.String(50), nullable=False, default='medium')
     
-    # enum: 'draft', 'active', 'in_progress', 'completed', 'cancelled', 'deferred'
-    status = db.Column(db.String(50), nullable=False, default='draft')
+    # enum: 'draft', 'active', 'completed', 'archived'
+    status = db.Column(db.String(20), default='draft', nullable=False)
+
+    # enum: 'draft', 'pending_approval', 'approved', 'rejected', 'closed'
+    approval_status = db.Column(db.String(20), default='draft', nullable=False)
+    approved_date = db.Column(db.DateTime(timezone=True))
+    rejected_reason = db.Column(db.String(500))
+    version_number = db.Column(db.Integer, default=1, nullable=False)
     
     progress_percentage = db.Column(db.Integer, default=0)
     
@@ -31,9 +37,6 @@ class Goal(db.Model):
 
     created_by = db.Column(db.String(36), nullable=False)
     approved_by = db.Column(db.String(36), nullable=True)
-    
-    # enum: 'pending', 'approved', 'revision_requested'
-    approval_status = db.Column(db.String(50), default='pending')
 
     created_at = db.Column(
         db.DateTime(timezone=True),
@@ -60,7 +63,10 @@ class Goal(db.Model):
             'description': self.description,
             'category': self.category,
             'priority': self.priority,
-            'status': self.status,
+            'approval_status': self.approval_status,
+            'approved_date': self.approved_date.isoformat() if self.approved_date else None,
+            'rejected_reason': self.rejected_reason,
+            'version_number': self.version_number,
             'progress_percentage': self.progress_percentage,
             'start_date': self.start_date.isoformat() if self.start_date else None,
             'target_date': self.target_date.isoformat() if self.target_date else None,
@@ -69,9 +75,7 @@ class Goal(db.Model):
             'appraisal_cycle_id': self.appraisal_cycle_id,
             'created_by': self.created_by,
             'approved_by': self.approved_by,
-            'approval_status': self.approval_status,
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat(),
-            # Optionally include limited children info or just IDs
             'key_results': [kr.to_dict() for kr in self.key_results]
         }

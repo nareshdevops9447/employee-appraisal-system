@@ -43,7 +43,11 @@ export interface Goal {
     appraisal_cycle_id?: string;
     created_by: string;
     approved_by?: string;
-    approval_status: 'pending' | 'approved' | 'revision_requested';
+    // approval_status: 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'closed'
+    approval_status: string;
+    approved_date?: string;
+    rejected_reason?: string;
+    version_number: number;
     created_at: string;
     updated_at: string;
 

@@ -137,6 +137,8 @@ services:
       - USER_SERVICE_URL=${USER_SERVICE_URL}
       - FLASK_ENV=${FLASK_ENV}
       - FLASK_DEBUG=${FLASK_DEBUG}
+    volumes:
+      - ./services/appraisal-service:/app
     depends_on:
       postgres:
         condition: service_healthy
@@ -165,6 +167,7 @@ services:
       - JWT_ALGORITHM=${JWT_ALGORITHM}
       - FLASK_ENV=${FLASK_ENV}
       - FLASK_DEBUG=${FLASK_DEBUG}
+      - APPRAISAL_SERVICE_URL=http://appraisal-service:5003
     depends_on:
       postgres:
         condition: service_healthy

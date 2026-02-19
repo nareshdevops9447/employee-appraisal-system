@@ -9,15 +9,15 @@ export interface AppraisalCycle {
     startDate: string;
     endDate: string;
     status: "draft" | "active" | "completed" | "archived";
-    type: "annual" | "quarterly" | "probation";
+    type: "annual" | "mid_year" | "probation";
 }
 
 export interface CreateCycleData {
     name: string;
     start_date: string;
     end_date: string;
-    type: "annual" | "quarterly" | "probation";
-    questions: { text: string; type: string; category: string }[];
+    cycle_type: "annual" | "mid_year" | "probation";
+    questions?: { text: string; type: string; category: string }[];
 }
 
 export function useCycles() {
@@ -27,6 +27,21 @@ export function useCycles() {
             const { data } = await apiClient.get<AppraisalCycle[]>("/api/cycles");
             return data;
         },
+    });
+}
+
+/**
+ * Fetch the currently active cycle (visible to ALL users).
+ * Calls: GET /api/cycles/active
+ */
+export function useActiveCycleInfo() {
+    return useQuery({
+        queryKey: ["cycles", "active"],
+        queryFn: async () => {
+            const { data } = await apiClient.get<AppraisalCycle | null>("/api/cycles/active");
+            return data;
+        },
+        staleTime: 30 * 1000, // 30 seconds
     });
 }
 
@@ -60,6 +75,7 @@ export function useActivateCycle() {
         onSuccess: () => {
             toast.success("Cycle activated successfully");
             queryClient.invalidateQueries({ queryKey: ["cycles"] });
+            queryClient.invalidateQueries({ queryKey: ["active-appraisal"] });
         },
         onError: (error: any) => {
             toast.error(error.response?.data?.error || "Failed to activate cycle");
@@ -78,6 +94,7 @@ export function useStopCycle() {
         onSuccess: () => {
             toast.success("Cycle stopped (reverted to draft)");
             queryClient.invalidateQueries({ queryKey: ["cycles"] });
+            queryClient.invalidateQueries({ queryKey: ["active-appraisal"] });
         },
         onError: (error: any) => {
             toast.error(error.response?.data?.error || "Failed to stop cycle");
@@ -102,3 +119,21 @@ export function useUpdateCycle() {
         },
     });
 }
+
+export function useDeleteCycle() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async (id: string) => {
+            await apiClient.delete(`/api/cycles/${id}`);
+        },
+        onSuccess: () => {
+            toast.success("Cycle deleted successfully");
+            queryClient.invalidateQueries({ queryKey: ["cycles"] });
+        },
+        onError: (error: any) => {
+            toast.error(error.response?.data?.error || "Failed to delete cycle");
+        },
+    });
+}
+

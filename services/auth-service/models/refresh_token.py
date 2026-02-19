@@ -4,7 +4,7 @@ RefreshToken model — stores hashed refresh tokens for JWT renewal.
 import uuid
 from datetime import datetime, timezone
 
-from app import db
+from extensions import db
 
 
 class RefreshToken(db.Model):
