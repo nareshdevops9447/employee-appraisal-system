@@ -5,7 +5,7 @@ import datetime
 import jwt
 
 # Configure these to match docker-compose
-JWT_SECRET = "33231e2acef8b8da5292b1c4445027a9955b7d27c066dbaa2048ede0cfa1743e" 
+JWT_SECRET = "" 
 JWT_ALGORITHM = "HS256"
 
 # Direct access to Goal Service (bypass Gateway for backend logic test)
