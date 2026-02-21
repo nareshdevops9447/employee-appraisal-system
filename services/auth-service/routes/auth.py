@@ -9,8 +9,8 @@ import bcrypt
 import jwt as pyjwt
 from flask import Blueprint, request, jsonify, g, current_app
 import requests as http_requests
+import os
 
-from app import db
 from app import db
 from models.user import UserAuth
 from models.refresh_token import RefreshToken
@@ -45,10 +45,13 @@ def azure_callback():
     access_token = data.get('access_token')
 
     if not id_token:
-        return jsonify({
-            'error': 'MISSING_TOKEN',
-            'message': 'id_token or access_token is required'
-        }), 400
+        return jsonify({'error': 'MISSING_TOKEN', 'message': 'id_token is required'}), 400
+        
+    if not access_token:
+        # We can still log them in if id_token is valid, but we cannot sync Graph data.
+        # Check if we should hard fail or soft fail. 
+        # Given the requirements, let's soft fail the Sync but allow Login.
+        logger.warning(f"No access_token provided — Graph API sync will be skipped.")
 
     # --- Validate the Azure AD token ---
     try:
@@ -77,19 +80,34 @@ def azure_callback():
     # We need to know if they have reports *before* we commit the role to DB
     
     # 1. Fetch current user's profile (to get Department)
-    user_graph_info = GraphClient.get_me(access_token)
-    logger.info(f"Full Graph User Profile Response: {user_graph_info}")
-    department = user_graph_info.get('department') if user_graph_info else None
-    display_from_graph = user_graph_info.get('display_name') if user_graph_info else name
+    user_graph_info = None
+    department = None
+    display_from_graph = name
+    manager_info = None
+    direct_reports = []
+    report_count = 0
 
-    # 2. Fetch Manager
-    manager_info = GraphClient.get_user_manager(access_token)
-    logger.info(f"Graph API Manager Info for {email}: {manager_info}")
+    if access_token:
+        user_graph_info = GraphClient.get_me(access_token)
+        if user_graph_info:
+            logger.info(f"Graph User Profile: {user_graph_info.get('email')}, Dept: {user_graph_info.get('department')}")
+            department = user_graph_info.get('department')
+            display_from_graph = user_graph_info.get('display_name') or name
+        else:
+            logger.warning("Failed to fetch user profile from Graph API")
 
-    # 3. Fetch direct reports
-    direct_reports = GraphClient.get_direct_reports(access_token)
-    report_count = len(direct_reports) if direct_reports else 0
-    logger.info(f"Graph API Direct Reports for {email}: {report_count} reports found")
+        # 2. Fetch Manager
+        manager_info = GraphClient.get_user_manager(access_token)
+        # Log minimal info
+        if manager_info:
+            logger.info(f"Manager found: {manager_info.get('email')}")
+
+        # 3. Fetch direct reports
+        direct_reports = GraphClient.get_direct_reports(access_token)
+        report_count = len(direct_reports) if direct_reports else 0
+        logger.info(f"Direct reports found: {report_count}")
+    else:
+        logger.warning("Skipping Graph API calls due to missing access_token")
 
     # --- Role Logic: Direct Reports = Manager ---
     # Only upgrade to 'manager' if they are 'employee' but have reports.
@@ -127,14 +145,21 @@ def azure_callback():
             # If current DB role is employee, and new is manager -> Upgrade.
             # If current DB role is manager, and new is manager -> Keep.
             
-            # Simple logic: If the calculate role is 'manager', and they are currently 'employee', upgrade.
+            # 1. Upgrade Employee -> Manager
             if user.role == 'employee' and role == 'manager':
                 user.role = 'manager'
-            # If they are currently admin, we generally leave them as admin (admins can do manager stuff usually)
+                logger.info(f"Upgraded role for {email} to manager")
             
+            # 2. Downgrade Manager -> Employee (if they lost reports)
+            # Only do this if we are SURE via Graph API (access_token present)
+            elif user.role == 'manager' and role == 'employee' and access_token:
+                 user.role = 'employee'
+                 logger.info(f"Downgraded role for {email} from manager to employee")
+
             # If the token says they are Admin, we set them to Admin regardless.
             if _is_admin_role(role) and not _is_admin_role(user.role):
                  user.role = role
+                 logger.info(f"Upgraded role for {email} to {role}")
 
     user.last_login = datetime.now(timezone.utc)
     db.session.commit()
@@ -202,6 +227,11 @@ def _sync_user_to_user_service(user, display_name='', manager_info=None, direct_
         avatar_url: Base64 string of user's photo.
     """
     user_service_url = current_app.config.get('USER_SERVICE_URL', '')
+    internal_secret = os.environ.get('INTERNAL_SYNC_SECRET') # Get secret
+    
+    if not internal_secret:
+        logger.warning("INTERNAL_SYNC_SECRET not set. User sync will likely fail with 403 Forbidden.")
+
     if not user_service_url:
         return
 
@@ -220,12 +250,21 @@ def _sync_user_to_user_service(user, display_name='', manager_info=None, direct_
     }
 
     try:
-        logger.info(f"Syncing user to User Service. Payload: {payload}")
-        http_requests.post(
+        # Sanitize log
+        safe_payload = {k: v for k, v in payload.items() if k != 'avatar_url' and k!= 'direct_reports'} 
+        logger.info(f"Syncing user {user.email} to User Service. Data keys: {list(safe_payload.keys())}")
+        
+        headers = {'X-Internal-Secret': internal_secret} if internal_secret else {}
+        
+        response = http_requests.post(
             f'{user_service_url}/api/users/sync',
             json=payload,
-            timeout=10,  # Increased timeout as this might involve multiple DB writes
+            headers=headers, 
+            timeout=10, 
         )
+        if not response.ok:
+            logger.error(f"User sync failed: {response.status_code} — {response.text}")
+            
     except Exception as e:
         logger.warning('Failed to sync user to User Service: %s', e)
 
@@ -294,7 +333,7 @@ def refresh():
         print(f"Refresh failed for token: {raw_token[:10]}... check reasons below")
         return jsonify({'error': 'INVALID_TOKEN', 'message': 'Invalid or expired refresh token'}), 401
 
-    user = UserAuth.query.get(rt.user_id)
+    user = db.session.get(UserAuth, rt.user_id)
     if user is None or not user.is_active:
         return jsonify({'error': 'INVALID_USER', 'message': 'User not found or disabled'}), 401
 
@@ -338,7 +377,7 @@ def logout():
 @require_auth
 def me():
     """Return the current user's profile from the JWT."""
-    user = UserAuth.query.get(g.current_user['user_id'])
+    user = db.session.get(UserAuth, g.current_user['user_id'])
     if user is None:
         return jsonify({'error': 'USER_NOT_FOUND', 'message': 'User not found'}), 404
 

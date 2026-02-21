@@ -15,7 +15,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Bell, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { NotificationBell } from "@/components/goals/notification-bell";
+import { NotificationBell } from "../goals/notification-bell";
 
 export function Topbar() {
     const { data: session } = useSession();

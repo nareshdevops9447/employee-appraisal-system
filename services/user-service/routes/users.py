@@ -1,4 +1,6 @@
 import logging
+import os
+import uuid
 from datetime import date
 from flask import Blueprint, jsonify, request
 from sqlalchemy import or_
@@ -32,13 +34,19 @@ def sync_user():
         "department": "Finance",
         "manager_oid": "manager-azure-oid",
         "manager_email": "manager@org.com",
-        "manager_email": "manager@org.com",
         "manager_name": "Manager Name",
         "direct_reports": [
             {"azure_oid": "...", "email": "...", "display_name": "...", "department": "...", "job_title": "..."}
         ]
     }
     """
+    # ── 0. Security Check ──
+    internal_secret = request.headers.get('X-Internal-Secret')
+    expected_secret = os.environ.get('INTERNAL_SYNC_SECRET')
+    # If standard config is missing, we fail secure (unless in strict dev mode without it)
+    if not expected_secret or internal_secret != expected_secret:
+        return jsonify({'error': 'Forbidden'}), 403
+
     data = request.get_json()
     if not data:
         return jsonify({'error': 'No data provided'}), 400
@@ -101,7 +109,6 @@ def sync_user():
 
                 # We need at least an email or an OID to create a stub
                 if manager_email:
-                    import uuid
                     new_mgr_id = str(uuid.uuid4())
                     manager_profile = UserProfile(
                         id=new_mgr_id,
@@ -110,7 +117,7 @@ def sync_user():
                         last_name=mgr_last,
                         azure_oid=manager_oid, # Save OID for future linking
                         is_active=True,
-                        start_date=date.today(),
+                        start_date=None,  # Stub profile has no real start date
                     )
                     db.session.add(manager_profile)
                     db.session.flush()
@@ -118,7 +125,7 @@ def sync_user():
                     logger.info(f"Created stub manager profile for: {manager_email} (OID: {manager_oid})")
 
         # ── 4. Upsert user profile ──
-        user = UserProfile.query.get(auth_user_id)
+        user = db.session.get(UserProfile, auth_user_id)
 
         if not user:
             # Also check by email (user might exist with a temp ID from stub creation)
@@ -190,7 +197,7 @@ def sync_user():
 
         # ── 5. Process direct reports (create stubs if needed) ──
         direct_reports = data.get('direct_reports') or []
-        logger.info(f"Processing {len(direct_reports)} direct reports. Data: {direct_reports}")
+        logger.info(f"Processing {len(direct_reports)} direct reports for {email}")
         for report in direct_reports:
             report_email = (report.get('email') or '').lower().strip()
             if not report_email:
@@ -230,7 +237,6 @@ def sync_user():
 
             else:
                 # Create stub for the direct report
-                import uuid
                 rpt_name = report.get('display_name', '')
                 rpt_parts = rpt_name.strip().split(' ', 1) if rpt_name else ['', '']
                 rpt_first = rpt_parts[0] or report_email.split('@')[0]
@@ -247,7 +253,7 @@ def sync_user():
                     manager_id=auth_user_id,
                     azure_oid=rpt_oid,
                     is_active=True,
-                    start_date=date.today(),
+                    start_date=None,  # Stub profile
                 )
                 db.session.add(report_profile)
                 logger.info(f"Created stub profile for direct report: {report_email}")
@@ -322,7 +328,7 @@ def get_user(user_id):
             return jsonify({'error': 'Unauthorized'}), 401
         user_id = current_user_id
 
-    user = UserProfile.query.get(user_id)
+    user = db.session.get(UserProfile, user_id)
     if not user:
         return jsonify({'error': 'User not found'}), 404
 
@@ -342,7 +348,7 @@ def create_user():
         if field not in data:
             return jsonify({'error': f'Missing required field: {field}'}), 400
 
-    if UserProfile.query.get(data['id']):
+    if db.session.get(UserProfile, data['id']):
         return jsonify({'error': 'User ID already exists'}), 409
     if UserProfile.query.filter_by(email=data['email']).first():
         return jsonify({'error': 'Email already exists'}), 409
@@ -386,7 +392,7 @@ def update_user(user_id):
     if user_id != current_user_id and current_role not in ('hr_admin', 'super_admin'):
         return jsonify({'error': 'Forbidden'}), 403
 
-    user = UserProfile.query.get(user_id)
+    user = db.session.get(UserProfile, user_id)
     if not user:
         return jsonify({'error': 'User not found'}), 404
 
@@ -428,7 +434,7 @@ def get_direct_reports(user_id):
     if user_id == 'me':
         user_id = request.headers.get('X-User-Id')
 
-    user = UserProfile.query.get(user_id)
+    user = db.session.get(UserProfile, user_id)
     if not user:
         return jsonify({'error': 'User not found'}), 404
 
@@ -485,7 +491,7 @@ def get_manager_chain(user_id):
     if user_id == 'me':
         user_id = request.headers.get('X-User-Id')
 
-    user = UserProfile.query.get(user_id)
+    user = db.session.get(UserProfile, user_id)
     if not user:
         return jsonify({'error': 'User not found'}), 404
 
