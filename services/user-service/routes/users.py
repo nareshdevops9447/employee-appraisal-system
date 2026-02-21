@@ -1,4 +1,6 @@
 import logging
+import os
+import uuid
 from datetime import date
 from flask import Blueprint, jsonify, request
 from sqlalchemy import or_
@@ -38,12 +40,21 @@ def sync_user():
         ]
     }
     """
+    # ── 0. Security Check ──
+    internal_secret = request.headers.get('X-Internal-Secret')
+    expected_secret = os.environ.get('INTERNAL_SYNC_SECRET')
+    # If standard config is missing, we fail secure (unless in strict dev mode without it)
+    if not expected_secret or internal_secret != expected_secret:
+        return jsonify({'error': 'Forbidden'}), 403
+
     data = request.get_json()
     if not data:
         return jsonify({'error': 'No data provided'}), 400
 
     auth_user_id = data.get('auth_user_id')
     email = (data.get('email') or '').lower().strip()
+    azure_oid = data.get('azure_oid')  # Extract Azure OID
+    avatar_url = data.get('avatar_url') # Extract Avatar URL
 
     if not auth_user_id or not email:
         return jsonify({'error': 'auth_user_id and email are required'}), 400
@@ -79,10 +90,12 @@ def sync_user():
 
         if manager_oid or manager_email:
             # Look up manager by azure_oid first, then email
-            # Note: UserProfile doesn't store azure_oid, so we look up by email
-            # Auth service stores azure_oid; user-service uses auth_user_id as PK
             manager_profile = None
-            if manager_email:
+            
+            if manager_oid:
+                 manager_profile = UserProfile.query.filter_by(azure_oid=manager_oid).first()
+
+            if not manager_profile and manager_email:
                 manager_profile = UserProfile.query.filter_by(email=manager_email).first()
 
             if manager_profile:
@@ -91,26 +104,28 @@ def sync_user():
                 # Manager hasn't logged in yet — create a stub profile
                 manager_name = data.get('manager_name', '')
                 mgr_parts = manager_name.strip().split(' ', 1) if manager_name else ['', '']
-                mgr_first = mgr_parts[0] or manager_email.split('@')[0] if manager_email else 'Unknown'
+                mgr_first = mgr_parts[0] or (manager_email.split('@')[0] if manager_email else 'Unknown')
                 mgr_last = mgr_parts[1] if len(mgr_parts) > 1 else ''
 
+                # We need at least an email or an OID to create a stub
                 if manager_email:
-                    import uuid
+                    new_mgr_id = str(uuid.uuid4())
                     manager_profile = UserProfile(
-                        id=str(uuid.uuid4()),  # Temp ID; will be updated when manager logs in
+                        id=new_mgr_id,
                         email=manager_email,
                         first_name=mgr_first,
                         last_name=mgr_last,
+                        azure_oid=manager_oid, # Save OID for future linking
                         is_active=True,
-                        start_date=date.today(),
+                        start_date=None,  # Stub profile has no real start date
                     )
                     db.session.add(manager_profile)
                     db.session.flush()
                     manager_id = manager_profile.id
-                    logger.info(f"Created stub manager profile for: {manager_email}")
+                    logger.info(f"Created stub manager profile for: {manager_email} (OID: {manager_oid})")
 
         # ── 4. Upsert user profile ──
-        user = UserProfile.query.get(auth_user_id)
+        user = db.session.get(UserProfile, auth_user_id)
 
         if not user:
             # Also check by email (user might exist with a temp ID from stub creation)
@@ -136,6 +151,7 @@ def sync_user():
                     job_title=user.job_title,
                     department_id=department_id or user.department_id,
                     manager_id=manager_id or user.manager_id,
+                    azure_oid=azure_oid, # Ensure OID is carried over
                     employment_type=user.employment_type,
                     start_date=user.start_date or date.today(),
                     is_active=True,
@@ -152,6 +168,14 @@ def sync_user():
                     user.department_id = department_id
                 if manager_id:
                     user.manager_id = manager_id
+                if azure_oid:
+                    user.azure_oid = azure_oid # Update OID if missing
+                
+                # Update avatar if provided
+                avatar_url = data.get('avatar_url')
+                if avatar_url:
+                    user.avatar_url = avatar_url
+                    
                 user.is_active = True
         else:
             # Create new profile
@@ -162,6 +186,8 @@ def sync_user():
                 last_name=last_name,
                 department_id=department_id,
                 manager_id=manager_id,
+                azure_oid=azure_oid, # Save OID
+                avatar_url=data.get('avatar_url'), # Save avatar
                 employment_type='full_time',
                 start_date=date.today(),
                 is_active=True,
@@ -171,23 +197,51 @@ def sync_user():
 
         # ── 5. Process direct reports (create stubs if needed) ──
         direct_reports = data.get('direct_reports') or []
+        logger.info(f"Processing {len(direct_reports)} direct reports for {email}")
         for report in direct_reports:
             report_email = (report.get('email') or '').lower().strip()
             if not report_email:
                 continue
+            
+            # Resolve department for the report
+            report_dept_name = report.get('department')
+            logger.info(f"Direct report {report_email} department: {report_dept_name}")
+            report_dept_id = None
+            if report_dept_name:
+                # Simple cache or query could work here. For now, query.
+                r_dept = Department.query.filter(Department.name.ilike(report_dept_name)).first()
+                if r_dept:
+                    report_dept_id = r_dept.id
+                else:
+                    # Auto-create if not exists
+                    r_dept = Department(name=report_dept_name)
+                    db.session.add(r_dept)
+                    db.session.flush()
+                    report_dept_id = r_dept.id
 
             report_profile = UserProfile.query.filter_by(email=report_email).first()
+            
             if report_profile:
                 # Update manager_id to point to this user
                 if report_profile.manager_id != auth_user_id:
                     report_profile.manager_id = auth_user_id
+                
+                # Update OID if missing
+                rpt_oid = report.get('azure_oid')
+                if rpt_oid and not report_profile.azure_oid:
+                    report_profile.azure_oid = rpt_oid
+                
+                # Update Department if missing or changed (optional: strict sync?)
+                if report_dept_id and report_profile.department_id != report_dept_id:
+                    report_profile.department_id = report_dept_id
+
             else:
                 # Create stub for the direct report
-                import uuid
                 rpt_name = report.get('display_name', '')
                 rpt_parts = rpt_name.strip().split(' ', 1) if rpt_name else ['', '']
                 rpt_first = rpt_parts[0] or report_email.split('@')[0]
                 rpt_last = rpt_parts[1] if len(rpt_parts) > 1 else ''
+                rpt_oid = report.get('azure_oid')
 
                 report_profile = UserProfile(
                     id=str(uuid.uuid4()),
@@ -195,9 +249,11 @@ def sync_user():
                     first_name=rpt_first,
                     last_name=rpt_last,
                     job_title=report.get('job_title'),
+                    department_id=report_dept_id, # Set Department
                     manager_id=auth_user_id,
+                    azure_oid=rpt_oid,
                     is_active=True,
-                    start_date=date.today(),
+                    start_date=None,  # Stub profile
                 )
                 db.session.add(report_profile)
                 logger.info(f"Created stub profile for direct report: {report_email}")
@@ -272,7 +328,7 @@ def get_user(user_id):
             return jsonify({'error': 'Unauthorized'}), 401
         user_id = current_user_id
 
-    user = UserProfile.query.get(user_id)
+    user = db.session.get(UserProfile, user_id)
     if not user:
         return jsonify({'error': 'User not found'}), 404
 
@@ -292,7 +348,7 @@ def create_user():
         if field not in data:
             return jsonify({'error': f'Missing required field: {field}'}), 400
 
-    if UserProfile.query.get(data['id']):
+    if db.session.get(UserProfile, data['id']):
         return jsonify({'error': 'User ID already exists'}), 409
     if UserProfile.query.filter_by(email=data['email']).first():
         return jsonify({'error': 'Email already exists'}), 409
@@ -336,7 +392,7 @@ def update_user(user_id):
     if user_id != current_user_id and current_role not in ('hr_admin', 'super_admin'):
         return jsonify({'error': 'Forbidden'}), 403
 
-    user = UserProfile.query.get(user_id)
+    user = db.session.get(UserProfile, user_id)
     if not user:
         return jsonify({'error': 'User not found'}), 404
 
@@ -378,7 +434,7 @@ def get_direct_reports(user_id):
     if user_id == 'me':
         user_id = request.headers.get('X-User-Id')
 
-    user = UserProfile.query.get(user_id)
+    user = db.session.get(UserProfile, user_id)
     if not user:
         return jsonify({'error': 'User not found'}), 404
 
@@ -435,7 +491,7 @@ def get_manager_chain(user_id):
     if user_id == 'me':
         user_id = request.headers.get('X-User-Id')
 
-    user = UserProfile.query.get(user_id)
+    user = db.session.get(UserProfile, user_id)
     if not user:
         return jsonify({'error': 'User not found'}), 404
 

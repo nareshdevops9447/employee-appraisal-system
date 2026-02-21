@@ -22,8 +22,8 @@ def seed_data():
         print("Seeding Appraisal Service...")
         
         # 1. Clear existing data
-        db.drop_all()
-        db.create_all()
+        # db.drop_all()
+        # db.create_all()
         
         # 2. Create Cycle
         cycle = AppraisalCycle(

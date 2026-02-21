@@ -5,6 +5,9 @@ from models.appraisal_cycle import AppraisalCycle
 from models.appraisal_question import AppraisalQuestion
 from models.appraisal import Appraisal
 from utils.rbac import require_auth, require_role
+from services.eligibility_engine import check_eligibility
+
+from services.eligibility_engine import check_eligibility
 
 cycles_bp = Blueprint('cycles', __name__)
 
@@ -22,6 +25,7 @@ def _create_appraisals_for_active_users(cycle_id, criteria=None):
     try:
         cycle = AppraisalCycle.query.get(cycle_id)
         if not cycle:
+# ... (rest of the file remains, but we need to ensure we don't duplicate code)
             print(f"Error: Cycle {cycle_id} not found")
             return
 
@@ -67,14 +71,16 @@ def _create_appraisals_for_active_users(cycle_id, criteria=None):
         notified = 0
 
         for user in users:
-            # Probation eligibility: only users within 6 months
+            # Probation eligibility: only users within 6 months (Legacy check, keeping for safety)
             if cycle.cycle_type == 'probation':
                 user_start_str = user.get('start_date')
                 if not user_start_str:
                     skipped += 1
                     continue
                 user_start = date.fromisoformat(user_start_str)
-                months_employed = (cycle.start_date - user_start).days / 30
+                # Helper to calc months
+                delta = date.today() - user_start
+                months_employed = delta.days / 30
                 if months_employed > 6:
                     skipped += 1
                     continue
@@ -85,11 +91,24 @@ def _create_appraisals_for_active_users(cycle_id, criteria=None):
             ).first()
 
             if not exists:
+                # ── NEW: Check Eligibility Engine ──
+                eligibility = check_eligibility(user, cycle)
+                
+                if not eligibility['is_eligible']:
+                    # Log and skip
+                    print(f"Skipping {user['email']}: {eligibility['reason']}")
+                    skipped += 1
+                    continue
+
                 appraisal = Appraisal(
                     cycle_id=cycle_id,
                     employee_id=user['id'],
                     manager_id=user.get('manager_id'),
                     status='not_started',
+                    # Populate new fields
+                    eligibility_status='eligible', # or eligibility['status'] if mapped
+                    eligibility_reason=eligibility['reason'],
+                    is_prorated=eligibility['is_prorated'],
                 )
                 db.session.add(appraisal)
                 count += 1

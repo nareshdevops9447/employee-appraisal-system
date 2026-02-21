@@ -22,7 +22,7 @@ class UserProfile(db.Model):
     # full_time, part_time, contractor, volunteer
     
     start_date = db.Column(db.Date, nullable=True)
-    avatar_url = db.Column(db.String(255), nullable=True)
+    avatar_url = db.Column(db.Text, nullable=True)
     phone = db.Column(db.String(20), nullable=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     
