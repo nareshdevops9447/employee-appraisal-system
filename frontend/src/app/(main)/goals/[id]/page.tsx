@@ -28,6 +28,18 @@ import { GoalCommentTimeline } from "@/components/goals/goal-comment-timeline";
 import { GoalAuditTrail } from "@/components/goals/goal-audit-trail";
 import { GoalVersionHistory } from "@/components/goals/goal-version-history";
 import { useUser } from "@/hooks/use-user";
+import { useDeleteGoal } from "@/hooks/use-goals";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
 
 export default function GoalDetailPage() {
     const params = useParams();
@@ -35,13 +47,16 @@ export default function GoalDetailPage() {
     const id = (params?.id as string) || '';
     const { data: goal, isLoading } = useGoal(id);
     const { data: session } = useSession();
+    const { data: assignedUser } = useUser(goal?.employee_id);
+    const deleteGoal = useDeleteGoal();
+    const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
     // Check permissions
     const isOwner = session?.user?.id === goal?.employee_id;
-    // const isManager = ... (need manager check logic)
-    const isOwnerOrManager = isOwner; // simplify for now
+    const isManager = session?.user?.id === assignedUser?.manager_id;
+    const isAdmin = session?.user?.role === 'hr_admin' || session?.user?.role === 'super_admin';
+    const canEditOrDelete = isOwner || isManager || isAdmin;
 
-    const { data: assignedUser } = useUser(goal?.employee_id);
 
     if (isLoading) return <div className="space-y-6"><Skeleton className="h-12 w-1/2" /><Skeleton className="h-64 w-full" /></div>;
     if (!goal) return <div>Goal not found</div>;
@@ -70,7 +85,7 @@ export default function GoalDetailPage() {
                         onEditClick={() => router.push(`/goals/${goal.id}/edit`)}
                     />
 
-                    {isOwnerOrManager && (
+                    {canEditOrDelete && (
                         <Button variant="outline" size="sm" asChild>
                             <Link href={`/goals/${goal.id}/edit`}>
                                 <Pencil className="w-4 h-4 mr-2" /> Edit Goal
@@ -84,11 +99,46 @@ export default function GoalDetailPage() {
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                            <DropdownMenuItem className="text-destructive">Delete Goal</DropdownMenuItem>
+                            {canEditOrDelete && (
+                                <DropdownMenuItem
+                                    className="text-destructive"
+                                    onClick={() => setShowDeleteDialog(true)}
+                                >
+                                    Delete Goal
+                                </DropdownMenuItem>
+                            )}
                         </DropdownMenuContent>
                     </DropdownMenu>
                 </div>
             </div>
+
+            <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This action cannot be undone. This will permanently delete the goal
+                            "<strong>{goal.title}</strong>" and all its associated key results and comments.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            onClick={() => {
+                                deleteGoal.mutate(goal.id, {
+                                    onSuccess: () => {
+                                        router.push('/goals');
+                                    }
+                                });
+                            }}
+                        >
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
 
             {/* Main Content Grid */}
             <div className="grid gap-6 md:grid-cols-3">
@@ -113,12 +163,14 @@ export default function GoalDetailPage() {
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between pb-2">
                             <CardTitle>Key Results</CardTitle>
-                            {isOwnerOrManager && <AddKeyResultDialog goalId={goal.id} />}
+                            {canEditOrDelete && <AddKeyResultDialog goalId={goal.id} />}
+
                         </CardHeader>
                         <CardContent className="space-y-4">
                             {goal.key_results && goal.key_results.length > 0 ? (
                                 goal.key_results.map(kr => (
-                                    <KeyResultItem key={kr.id} keyResult={kr} isOwnerOrManager={isOwnerOrManager} />
+                                    <KeyResultItem key={kr.id} keyResult={kr} isOwnerOrManager={canEditOrDelete} />
+
                                 ))
                             ) : (
                                 <p className="text-muted-foreground italic text-sm">No key results defined.</p>

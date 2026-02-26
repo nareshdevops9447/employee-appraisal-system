@@ -14,6 +14,8 @@ export interface UserProfile {
     is_active: boolean;
     joined_at?: string;
     start_date?: string;
+    probation_end_date?: string;
+    probation_status?: 'pending' | 'cleared' | 'failed';
     avatar_url?: string;
     phone?: string;
     department?: Department;

@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Mail, MoreHorizontal, User, Plus } from "lucide-react";
+import { MoreHorizontal, User, Plus } from "lucide-react";
 import Link from "next/link";
 import {
     DropdownMenu,
@@ -17,6 +17,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { TeamsContactActions } from "@/components/shared/teams-contact-actions";
 
 interface TeamMemberCardProps {
     member: TeamMember;
@@ -90,11 +91,7 @@ export function TeamMemberCard({ member }: TeamMemberCardProps) {
 
             </CardContent>
             <CardFooter className="pt-2">
-                <Button variant="outline" size="sm" className="w-full" asChild>
-                    <Link href={`mailto:${member.email}`}>
-                        <Mail className="mr-2 h-3 w-3" /> Email
-                    </Link>
-                </Button>
+                <TeamsContactActions email={member.email} name={member.name} className="w-full" />
             </CardFooter>
         </Card>
     );

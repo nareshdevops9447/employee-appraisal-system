@@ -36,13 +36,22 @@ export default function CreateCyclePage() {
         },
     });
 
+    const selectedType = form.watch("type");
+
     const onSubmit = (values: z.infer<typeof cycleSchema>) => {
+        // For annual cycles, auto-set eligibility cutoff to Sept 30 of the cycle's start year
+        let eligibility_cutoff_date: string | undefined;
+        if (values.type === "annual" && values.startDate) {
+            const year = values.startDate.getFullYear();
+            eligibility_cutoff_date = new Date(year, 8, 30).toISOString(); // Sept 30
+        }
+
         createCycle.mutate({
             name: values.name,
-            type: values.type,
+            cycle_type: values.type,
             start_date: values.startDate.toISOString(),
             end_date: values.endDate.toISOString(),
-            questions: [],
+            eligibility_cutoff_date,
         }, {
             onSuccess: () => router.push("/admin/cycles"),
         });
@@ -70,7 +79,7 @@ export default function CreateCyclePage() {
                                     <FormItem>
                                         <FormLabel>Cycle Name</FormLabel>
                                         <FormControl>
-                                            <Input placeholder="e.g., 2025 Annual Review" {...field} />
+                                            <Input placeholder="e.g., 2026 Annual Review" {...field} />
                                         </FormControl>
                                         <FormMessage />
                                     </FormItem>
@@ -99,6 +108,26 @@ export default function CreateCyclePage() {
                                     </FormItem>
                                 )}
                             />
+
+                            {/* Type-specific guidance */}
+                            {selectedType === "annual" && (
+                                <div className="rounded-lg border bg-blue-50 dark:bg-blue-950/30 p-3 text-sm text-blue-800 dark:text-blue-200">
+                                    <strong>Annual Cycle:</strong> Employees who joined on or before <strong>Sept 30</strong> will be included (once probation is cleared).
+                                    New joiners after Sept 30 will be deferred to next year's annual cycle.
+                                </div>
+                            )}
+                            {selectedType === "probation" && (
+                                <div className="rounded-lg border bg-amber-50 dark:bg-amber-950/30 p-3 text-sm text-amber-800 dark:text-amber-200">
+                                    <strong>Probation Cycle:</strong> For new employees who joined after the annual cycle cutoff.
+                                    This is usually auto-created when an annual cycle is activated.
+                                </div>
+                            )}
+                            {selectedType === "mid_year" && (
+                                <div className="rounded-lg border bg-purple-50 dark:bg-purple-950/30 p-3 text-sm text-purple-800 dark:text-purple-200">
+                                    <strong>Half-Yearly Cycle:</strong> For employees who transferred teams during the review period.
+                                    Only employees with recorded team changes will be included.
+                                </div>
+                            )}
 
                             <div className="grid grid-cols-2 gap-4">
                                 <FormField

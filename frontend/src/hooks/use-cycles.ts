@@ -17,6 +17,7 @@ export interface CreateCycleData {
     start_date: string;
     end_date: string;
     cycle_type: "annual" | "mid_year" | "probation";
+    eligibility_cutoff_date?: string;
     questions?: { text: string; type: string; category: string }[];
 }
 
@@ -69,7 +70,7 @@ export function useActivateCycle() {
 
     return useMutation({
         mutationFn: async ({ id, criteria }: { id: string; criteria?: any }) => {
-            const { data } = await apiClient.post(`/api/cycles/${id}/activate`, criteria);
+            const { data } = await apiClient.post(`/api/cycles/${id}/activate`, criteria || {});
             return data;
         },
         onSuccess: () => {
@@ -78,7 +79,16 @@ export function useActivateCycle() {
             queryClient.invalidateQueries({ queryKey: ["active-appraisal"] });
         },
         onError: (error: any) => {
-            toast.error(error.response?.data?.error || "Failed to activate cycle");
+            console.error("Cycle activation error:", {
+                status: error.response?.status,
+                data: error.response?.data,
+                message: error.message,
+            });
+            const msg = error.response?.data?.message
+                || error.response?.data?.error
+                || error.message
+                || "Failed to activate cycle";
+            toast.error(msg);
         },
     });
 }

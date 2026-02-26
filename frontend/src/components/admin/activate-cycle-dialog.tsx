@@ -35,7 +35,7 @@ import { useDepartments } from "@/hooks/use-departments";
 const criteriaSchema = z.object({
     department_id: z.string().optional(),
     employment_type: z.string().optional(),
-    eligibility_rule: z.enum(["auto", "all", "full_cycle_only", "probation_only"]),
+    eligibility_rule: z.enum(["auto", "all", "full_hike_only", "eligible_for_hike", "probation_or_feedback"]),
 });
 
 interface ActivateCycleDialogProps {

@@ -1,6 +1,6 @@
 services:
   # ============================================
-  # PostgreSQL Database (single instance, 4 databases)
+  # PostgreSQL Database (single database: eas_db)
   # ============================================
   postgres:
     image: postgres:15
@@ -23,164 +23,35 @@ services:
     restart: unless-stopped
 
   # ============================================
-  # API Gateway
+  # Backend (consolidated monolith)
   # ============================================
-  api-gateway:
+  backend:
     build:
-      context: ./services/api-gateway
-      dockerfile: Dockerfile
-    container_name: eas-api-gateway
+      context: ./backend
+    container_name: eas-backend
     ports:
       - "5000:5000"
     environment:
-      - AUTH_SERVICE_URL=${AUTH_SERVICE_URL}
-      - USER_SERVICE_URL=${USER_SERVICE_URL}
-      - APPRAISAL_SERVICE_URL=${APPRAISAL_SERVICE_URL}
-      - GOAL_SERVICE_URL=${GOAL_SERVICE_URL}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/eas_db
       - JWT_SECRET=${JWT_SECRET}
-      - JWT_ALGORITHM=${JWT_ALGORITHM}
-      - FLASK_ENV=${FLASK_ENV}
-      - FLASK_DEBUG=${FLASK_DEBUG}
-    depends_on:
-      auth-service:
-        condition: service_healthy
-      user-service:
-        condition: service_healthy
-      appraisal-service:
-        condition: service_healthy
-      goal-service:
-        condition: service_healthy
-    healthcheck:
-      test: [ "CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5000/health')\"" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - appraisal-network
-    restart: unless-stopped
-
-  # ============================================
-  # Auth Service
-  # ============================================
-  auth-service:
-    build:
-      context: ./services/auth-service
-      dockerfile: Dockerfile
-    container_name: eas-auth-service
-    ports:
-      - "5001:5001"
-    environment:
-      - DATABASE_URL=${AUTH_DB_URL}
-      - JWT_SECRET=${JWT_SECRET}
-      - JWT_ALGORITHM=${JWT_ALGORITHM}
-      - JWT_EXPIRATION_HOURS=${JWT_EXPIRATION_HOURS}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - AZURE_AD_TENANT_ID=${AZURE_AD_TENANT_ID}
       - AZURE_AD_CLIENT_ID=${AZURE_AD_CLIENT_ID}
       - AZURE_AD_CLIENT_SECRET=${AZURE_AD_CLIENT_SECRET}
-      - AZURE_AD_TENANT_ID=${AZURE_AD_TENANT_ID}
-      - USER_SERVICE_URL=${USER_SERVICE_URL}
-      - FLASK_ENV=${FLASK_ENV}
-      - FLASK_DEBUG=${FLASK_DEBUG}
-      - INTERNAL_SYNC_SECRET=${INTERNAL_SYNC_SECRET}
+      - FLASK_ENV=${FLASK_ENV:-development}
+      - PORT=5000
     depends_on:
       postgres:
         condition: service_healthy
-    healthcheck:
-      test: [ "CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5001/health')\"" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
     networks:
       - appraisal-network
     restart: unless-stopped
-
-  # ============================================
-  # User Service
-  # ============================================
-  user-service:
-    build:
-      context: ./services/user-service
-      dockerfile: Dockerfile
-    container_name: eas-user-service
-    ports:
-      - "5002:5002"
-    environment:
-      - DATABASE_URL=${USER_DB_URL}
-      - JWT_SECRET=${JWT_SECRET}
-      - JWT_ALGORITHM=${JWT_ALGORITHM}
-      - FLASK_ENV=${FLASK_ENV}
-      - FLASK_DEBUG=${FLASK_DEBUG}
-      - INTERNAL_SYNC_SECRET=${INTERNAL_SYNC_SECRET}
-    depends_on:
-      postgres:
-        condition: service_healthy
     healthcheck:
-      test: [ "CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5002/health')\"" ]
-      interval: 10s
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')" ]
+      interval: 30s
       timeout: 5s
-      retries: 5
-    networks:
-      - appraisal-network
-    restart: unless-stopped
-
-  # ============================================
-  # Appraisal Service
-  # ============================================
-  appraisal-service:
-    build:
-      context: ./services/appraisal-service
-      dockerfile: Dockerfile
-    container_name: eas-appraisal-service
-    ports:
-      - "5003:5003"
-    environment:
-      - DATABASE_URL=${APPRAISAL_DB_URL}
-      - JWT_SECRET=${JWT_SECRET}
-      - JWT_ALGORITHM=${JWT_ALGORITHM}
-      - USER_SERVICE_URL=${USER_SERVICE_URL}
-      - FLASK_ENV=${FLASK_ENV}
-      - FLASK_DEBUG=${FLASK_DEBUG}
-    volumes:
-      - ./services/appraisal-service:/app
-    depends_on:
-      postgres:
-        condition: service_healthy
-    healthcheck:
-      test: [ "CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5003/health')\"" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - appraisal-network
-    restart: unless-stopped
-
-  # ============================================
-  # Goal Service
-  # ============================================
-  goal-service:
-    build:
-      context: ./services/goal-service
-      dockerfile: Dockerfile
-    container_name: eas-goal-service
-    ports:
-      - "5004:5004"
-    environment:
-      - DATABASE_URL=${GOAL_DB_URL}
-      - JWT_SECRET=${JWT_SECRET}
-      - JWT_ALGORITHM=${JWT_ALGORITHM}
-      - FLASK_ENV=${FLASK_ENV}
-      - FLASK_DEBUG=${FLASK_DEBUG}
-      - APPRAISAL_SERVICE_URL=http://appraisal-service:5003
-    depends_on:
-      postgres:
-        condition: service_healthy
-    healthcheck:
-      test: [ "CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5004/health')\"" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - appraisal-network
-    restart: unless-stopped
+      start_period: 15s
+      retries: 3
 
   # ============================================
   # Frontend (Next.js)
@@ -188,39 +59,29 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
     container_name: eas-frontend
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
-      - NEXTAUTH_URL=${NEXTAUTH_URL}
-      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - NEXT_PUBLIC_API_URL=http://localhost:5000
+      - NEXT_PUBLIC_BASE_URL=http://localhost:3000
+      - NEXT_PUBLIC_AZURE_AD_TENANT_ID=${AZURE_AD_TENANT_ID}
+      - AUTH_SERVICE_URL=http://backend:5000/api
+      - NEXTAUTH_URL=http://localhost:3000
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-4b984434db645245ff717199e8bca4ae66fdd0553157e1fe05a934ab114dc5a6}
       - AZURE_AD_CLIENT_ID=${AZURE_AD_CLIENT_ID}
       - AZURE_AD_CLIENT_SECRET=${AZURE_AD_CLIENT_SECRET}
       - AZURE_AD_TENANT_ID=${AZURE_AD_TENANT_ID}
-      - AUTH_SERVICE_URL=${AUTH_SERVICE_URL}
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-      - /app/.next
     depends_on:
-      api-gateway:
+      backend:
         condition: service_healthy
     networks:
       - appraisal-network
     restart: unless-stopped
 
-# ============================================
-# Networks
-# ============================================
 networks:
   appraisal-network:
     driver: bridge
 
-# ============================================
-# Volumes
-# ============================================
 volumes:
   postgres_data:
-    driver: local

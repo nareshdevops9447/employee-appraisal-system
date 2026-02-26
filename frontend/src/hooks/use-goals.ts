@@ -8,8 +8,8 @@ export function useGoals(params?: { status?: string; category?: string; priority
     return useQuery({
         queryKey: ['goals', params],
         queryFn: async () => {
-            const { data } = await apiClient.get<Goal[]>('/api/goals', { params });
-            return data;
+            const { data } = await apiClient.get<{ goals: Goal[]; total: number; page: number; per_page: number }>('/api/goals', { params });
+            return data.goals;
         },
     });
 }

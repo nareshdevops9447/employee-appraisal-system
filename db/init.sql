@@ -1,13 +1,8 @@
--- Initialize all databases for the Employee Appraisal System
--- This script runs on first PostgreSQL startup
+-- ============================================
+-- Employee Appraisal System — Single Database
+-- ============================================
+-- Creates a single consolidated database 'eas_db'
+-- replacing the previous 4 databases (auth_db, user_db, appraisal_db, goal_db)
 
-CREATE DATABASE auth_db;
-CREATE DATABASE user_db;
-CREATE DATABASE appraisal_db;
-CREATE DATABASE goal_db;
-
--- Grant privileges
-GRANT ALL PRIVILEGES ON DATABASE auth_db TO postgres;
-GRANT ALL PRIVILEGES ON DATABASE user_db TO postgres;
-GRANT ALL PRIVILEGES ON DATABASE appraisal_db TO postgres;
-GRANT ALL PRIVILEGES ON DATABASE goal_db TO postgres;
+CREATE DATABASE eas_db;
+GRANT ALL PRIVILEGES ON DATABASE eas_db TO postgres;

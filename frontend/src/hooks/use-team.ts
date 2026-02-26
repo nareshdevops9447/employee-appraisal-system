@@ -9,7 +9,7 @@ export interface TeamMember extends UserProfile {
     goals_completed?: number;
 }
 
-export function useTeamMembers(params?: { department_id?: string; search?: string }) {
+export function useTeamMembers(params?: { department_id?: string; search?: string; scope?: string }) {
     return useQuery({
         queryKey: ['team', params],
         queryFn: async () => {
@@ -17,7 +17,7 @@ export function useTeamMembers(params?: { department_id?: string; search?: strin
             // Map full_name → name for component compatibility
             return data.map((m) => ({
                 ...m,
-                name: m.name || m.full_name || `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.email,
+                name: m.name || (m as any).display_name || m.full_name || `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.email,
             }));
         },
     });
