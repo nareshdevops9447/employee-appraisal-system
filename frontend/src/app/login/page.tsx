@@ -28,6 +28,8 @@ function LoginForm() {
     const callbackUrl = searchParams.get('callbackUrl') || '/dashboard';
     const error = searchParams.get('error');
     const [isLoading, setIsLoading] = useState(false);
+    const [localLoading, setLocalLoading] = useState(false);
+    const [credentials, setCredentials] = useState({ email: '', password: '' });
 
     useEffect(() => {
         if (status === 'authenticated') {
@@ -35,7 +37,7 @@ function LoginForm() {
         }
     }, [status, router, callbackUrl]);
 
-    const handleLogin = async () => {
+    const handleMicrosoftLogin = async () => {
         setIsLoading(true);
         try {
             await signIn('microsoft-entra-id', { callbackUrl });
@@ -43,6 +45,29 @@ function LoginForm() {
             console.error('Login failed:', error);
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleLocalLogin = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLocalLoading(true);
+        try {
+            const result = await signIn('credentials', {
+                email: credentials.email,
+                password: credentials.password,
+                redirect: false,
+                callbackUrl,
+            });
+
+            if (result?.error) {
+                router.push(`/login?error=CredentialsSignin&callbackUrl=${encodeURIComponent(callbackUrl)}`);
+            } else {
+                router.replace(callbackUrl);
+            }
+        } catch (err) {
+            console.error('Local login failed:', err);
+        } finally {
+            setLocalLoading(false);
         }
     };
 
@@ -79,7 +104,9 @@ function LoginForm() {
                                 <div className="mt-2 text-sm text-red-300">
                                     {error === 'SessionExpired'
                                         ? 'Your session has expired. Please sign in again.'
-                                        : 'There was a problem signing you in.'}
+                                        : error === 'CredentialsSignin'
+                                            ? 'Invalid email or password.'
+                                            : 'There was a problem signing you in.'}
                                 </div>
                             </div>
                         </div>
@@ -88,8 +115,8 @@ function LoginForm() {
 
                 <div className="mt-8 space-y-6">
                     <button
-                        onClick={handleLogin}
-                        disabled={isLoading}
+                        onClick={handleMicrosoftLogin}
+                        disabled={isLoading || localLoading}
                         className="group relative flex w-full justify-center rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                     >
                         {isLoading ? (
@@ -104,14 +131,52 @@ function LoginForm() {
                             <span className="flex items-center gap-2">
                                 <svg className="h-5 w-5" viewBox="0 0 23 23" fill="currentColor">
                                     <path fill="#f35325" d="M1 1h10v10H1z" />
-                                    <path fill="#81bc06" d="M12 1h10v10H12z" />
+                                    <path fill="#81bc06" d="M12 1h10v10H1z" />
                                     <path fill="#05a6f0" d="M1 12h10v10H1z" />
-                                    <path fill="#ffba08" d="M12 12h10v10H12z" />
+                                    <path fill="#ffba08" d="M12 12h10v10H1z" />
                                 </svg>
                                 Sign in with Microsoft
                             </span>
                         )}
                     </button>
+
+                    <div className="relative flex items-center py-2">
+                        <div className="flex-grow border-t border-slate-800"></div>
+                        <span className="mx-4 flex-shrink text-sm text-slate-500">or use demo account</span>
+                        <div className="flex-grow border-t border-slate-800"></div>
+                    </div>
+
+                    <form onSubmit={handleLocalLogin} className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-400 mb-1">Email</label>
+                            <input
+                                type="email"
+                                required
+                                value={credentials.email}
+                                onChange={(e) => setCredentials({ ...credentials, email: e.target.value })}
+                                className="block w-full rounded-lg bg-slate-800 border-slate-700 text-white px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-blue-500"
+                                placeholder="name@example.com"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-400 mb-1">Password</label>
+                            <input
+                                type="password"
+                                required
+                                value={credentials.password}
+                                onChange={(e) => setCredentials({ ...credentials, password: e.target.value })}
+                                className="block w-full rounded-lg bg-slate-800 border-slate-700 text-white px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-blue-500"
+                                placeholder="••••••••"
+                            />
+                        </div>
+                        <button
+                            type="submit"
+                            disabled={isLoading || localLoading}
+                            className="w-full rounded-lg bg-slate-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-500 disabled:opacity-50"
+                        >
+                            {localLoading ? 'Authenticating...' : 'Sign In'}
+                        </button>
+                    </form>
                 </div>
             </div>
         </main>

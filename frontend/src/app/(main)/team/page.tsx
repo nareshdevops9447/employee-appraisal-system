@@ -31,12 +31,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 export default function TeamPage() {
     const [search, setSearch] = useState("");
     const [department, setDepartment] = useState("all");
+    const [scope, setScope] = useState<'my-team' | 'all'>('my-team');
     const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
     const { data: departments } = useDepartments();
 
     const { data: members, isLoading } = useTeamMembers({
         search: search || undefined,
-        department_id: department === "all" ? undefined : department
+        department_id: department === "all" ? undefined : department,
+        scope: scope === 'all' ? 'all' : undefined,
     });
 
     return (
@@ -82,7 +84,7 @@ export default function TeamPage() {
                             <SelectItem value="status">Status</SelectItem>
                         </SelectContent>
                     </Select>
-                    <Tabs defaultValue="my-team" className="w-[200px]">
+                    <Tabs value={scope} onValueChange={(v) => setScope(v as 'my-team' | 'all')} className="w-[200px]">
                         <TabsList className="grid w-full grid-cols-2 h-9 p-1">
                             <TabsTrigger value="my-team" className="text-xs">My Team</TabsTrigger>
                             <TabsTrigger value="all" className="text-xs">All</TabsTrigger>
@@ -133,11 +135,26 @@ export default function TeamPage() {
                                 <div className="grid grid-cols-2 gap-4 text-sm">
                                     <div>
                                         <h4 className="font-semibold text-muted-foreground mb-1">Department</h4>
-                                        <p>{selectedMember.department_id || 'N/A'}</p>
+                                        <p>{selectedMember.department_name || selectedMember.department_id || 'N/A'}</p>
                                     </div>
                                     <div>
                                         <h4 className="font-semibold text-muted-foreground mb-1">Email</h4>
                                         <p>{selectedMember.email}</p>
+                                    </div>
+                                    <div>
+                                        <h4 className="font-semibold text-muted-foreground mb-1">Start Date</h4>
+                                        <p>{selectedMember.start_date ? new Date(selectedMember.start_date).toLocaleDateString() : 'N/A'}</p>
+                                    </div>
+                                    <div>
+                                        <h4 className="font-semibold text-muted-foreground mb-1">Probation Status</h4>
+                                        <div className="flex items-center gap-2">
+                                            <Badge variant={selectedMember.probation_status === 'cleared' ? 'default' : 'secondary'} className="capitalize">
+                                                {selectedMember.probation_status || 'Pending'}
+                                            </Badge>
+                                            {selectedMember.probation_status !== 'cleared' && selectedMember.probation_end_date && (
+                                                <span className="text-[10px] text-muted-foreground">Ends: {new Date(selectedMember.probation_end_date).toLocaleDateString()}</span>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
 

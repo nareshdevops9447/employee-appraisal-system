@@ -12,11 +12,7 @@ The system is composed of the following services:
 | Service | Technology | Description |
 | :--- | :--- | :--- |
 | **Frontend** | Next.js 16 (App Router), React, TailwindCSS, shadcn/ui | The user interface for employees, managers, and admins. |
-| **API Gateway** | Flask | Entry point for all specialized services. Handles JWT validation and routing. |
-| **Auth Service** | Flask, PostgreSQL | Manages authentication, SSO (Azure AD), login, and token issuance. |
-| **User Service** | Flask, PostgreSQL | Manages employee profiles, departments, and organizational hierarchy. |
-| **Appraisal Service** | Flask, PostgreSQL | Manages review cycles, assessment workflows, and peer feedback. |
-| **Goal Service** | Flask, PostgreSQL | Manages OKRs, progress tracking, and goal approvals. |
+| **Backend** | Flask, SQLAlchemy, PostgreSQL | Consolidated monolithic backend handling Auth, Users, Appraisals, and Goals. |
 
 ## 🚀 Prerequisites
 
@@ -61,23 +57,49 @@ The system is seeded with a demo organization.
 | **Manager** | `charlie.brown@example.com` | `password` |
 | **Employee** | `david.wilson@example.com` | `password` |
 
+---
+
+### 🧼 Database Reset & Seeding
+
+If you need to wipe the database and start fresh with the demo personas, run:
+
+```bash
+.\reset-db.bat
+```
+
+This will automatically:
+1. Recreate all database tables.
+2. Seed Alice, Bob, Charlie, and David.
+3. Set David Wilson's start date to **Feb 15, 2026** (to test new joiner logic).
+
+---
+
+### ⏳ Time Travel Simulation
+
+If you want to quickly see the results of a **completed** appraisal flow without waiting for months:
+
+1. Run the simulation script:
+   ```bash
+   .\simulate-progression.bat
+   ```
+2. This script will:
+   - **Backdate David Wilson**: Sets his start date to 6 months ago (making him eligible for Annual cycle).
+   - **Complete Appraisal**: Instantly populates and completes David's 2026 appraisal with demo ratings and comments.
+
+This allows you to demonstrate the "Final Results" and "Meeting Notes" screens immediately.
+
+---
+
 ## 📂 Folder Structure
 
-```
-.
-├── docker-compose.yml      # Orchestration for all services
+├── docker-compose.yml      # Orchestration
 ├── frontend/               # Next.js Application
-│   ├── src/app/            # App Router pages
-│   ├── src/components/     # Reusable UI components
-│   └── src/lib/            # Utilities and API clients
-├── services/
-│   ├── api-gateway/        # Central entry point
-│   ├── auth-service/       # Authentication & SSO
-│   ├── user-service/       # Profile management
-│   ├── appraisal-service/  # Review workflows
-│   └── goal-service/       # Goal tracking
+├── backend/                # Consolidated Monolith Backend
+│   ├── app.py              # Application Entrypoint
+│   ├── models/             # Database Models
+│   ├── routes/             # API Routes
+│   └── services/           # Business Logic
 └── AZURE_AD_SETUP.md       # SSO Configuration Guide
-```
 
 ## ⚠️ Environment Variables
 

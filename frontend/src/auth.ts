@@ -10,10 +10,13 @@
  */
 import NextAuth from 'next-auth';
 import MicrosoftEntraID from 'next-auth/providers/microsoft-entra-id';
+import CredentialsProvider from 'next-auth/providers/credentials';
+
 import type { Role } from '@/types/auth';
 
 const AUTH_SERVICE_URL =
-    process.env.AUTH_SERVICE_URL || 'http://localhost:5001';
+    process.env.AUTH_SERVICE_URL || 'http://localhost:5000/api';
+
 
 const clientId = process.env.AZURE_AD_CLIENT_ID ?? '';
 const clientSecret = process.env.AZURE_AD_CLIENT_SECRET ?? '';
@@ -24,14 +27,54 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         MicrosoftEntraID({
             clientId,
             clientSecret,
-            issuer: `https://login.microsoftonline.com/${process.env.AZURE_AD_TENANT_ID ?? ''}/v2.0`,
+            issuer: `https://login.microsoftonline.com/${process.env.AZURE_AD_TENANT_ID || 'common'}/v2.0`,
             authorization: {
                 params: {
                     scope: 'openid profile email offline_access https://graph.microsoft.com/User.Read',
+                    prompt: 'select_account',
                 },
             },
         }),
+        CredentialsProvider({
+            name: 'Credentials',
+            credentials: {
+                email: { label: "Email", type: "email" },
+                password: { label: "Password", type: "password" }
+            },
+            async authorize(credentials) {
+                if (!credentials?.email || !credentials?.password) return null;
+
+                try {
+                    const res = await fetch(`${AUTH_SERVICE_URL}/auth/login`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            email: credentials.email,
+                            password: credentials.password,
+                        }),
+                    });
+
+                    if (!res.ok) return null;
+
+                    const data = await res.json();
+
+                    // The backend returns { access_token, refresh_token, user: { id, email, role, ... } }
+                    // We return an object that matches the shape NextAuth expects in the jwt callback's 'user' or 'account'
+                    return {
+                        id: data.user.id,
+                        email: data.user.email,
+                        role: data.user.role,
+                        backendAccessToken: data.access_token,
+                        backendRefreshToken: data.refresh_token,
+                    };
+                } catch (error) {
+                    console.error('[Auth] Local login error:', error);
+                    return null;
+                }
+            }
+        }),
     ],
+
 
     pages: {
         signIn: '/login',
@@ -92,18 +135,25 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         /**
          * Persist backend tokens and role in the NextAuth JWT.
          */
-        async jwt({ token, account }) {
-            // Initial sign in — store backend tokens
-            if (account) {
-                const acc = account as Record<string, unknown>;
-                token.accessToken = acc.backendAccessToken as string;
-                token.refreshToken = acc.backendRefreshToken as string;
-                const user = acc.backendUser as {
-                    id: string;
-                    role: Role;
-                } | undefined;
-                token.role = user?.role || 'employee';
-                token.userId = user?.id || '';
+        async jwt({ token, account, user }) {
+            // Initial sign in
+            if (account && user) {
+                if (account.provider === 'credentials') {
+                    // From CredentialsProvider authorize()
+                    const u = user as any;
+                    token.accessToken = u.backendAccessToken;
+                    token.refreshToken = u.backendRefreshToken;
+                    token.role = u.role || 'employee';
+                    token.userId = u.id;
+                } else if (account.provider === 'microsoft-entra-id') {
+                    // From MicrosoftEntraID signIn() callback stashing
+                    const acc = account as any;
+                    token.accessToken = acc.backendAccessToken;
+                    token.refreshToken = acc.backendRefreshToken;
+                    token.role = acc.backendUser?.role || 'employee';
+                    token.userId = acc.backendUser?.id;
+                }
+
                 // Access token expires in ~15 minutes
                 token.accessTokenExpires = Date.now() + 14 * 60 * 1000;
                 return token;
