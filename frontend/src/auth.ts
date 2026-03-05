@@ -1,5 +1,5 @@
 /**
- * NextAuth.js v5 configuration with Microsoft Entra ID (Azure AD) provider.
+ * NextAuth.js v4 configuration with Azure AD (Microsoft) provider.
  *
  * Flow:
  * 1. User clicks "Sign in with Microsoft" → Azure AD login
@@ -8,8 +8,8 @@
  * 4. jwt callback → stores backend JWT in NextAuth token
  * 5. session callback → exposes role + accessToken in session
  */
-import NextAuth from 'next-auth';
-import MicrosoftEntraID from 'next-auth/providers/microsoft-entra-id';
+import type { NextAuthOptions } from 'next-auth';
+import AzureADProvider from 'next-auth/providers/azure-ad';
 import CredentialsProvider from 'next-auth/providers/credentials';
 
 import type { Role } from '@/types/auth';
@@ -17,17 +17,17 @@ import type { Role } from '@/types/auth';
 const AUTH_SERVICE_URL =
     process.env.AUTH_SERVICE_URL || 'http://localhost:5000/api';
 
-
 const clientId = process.env.AZURE_AD_CLIENT_ID ?? '';
 const clientSecret = process.env.AZURE_AD_CLIENT_SECRET ?? '';
-// const tenantId = process.env.AZURE_AD_TENANT_ID ?? ''; // Not used here anymore
+const tenantId = process.env.AZURE_AD_TENANT_ID ?? 'common';
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+export const authOptions: NextAuthOptions = {
     providers: [
-        MicrosoftEntraID({
+        AzureADProvider({
+            id: 'microsoft-entra-id',
             clientId,
             clientSecret,
-            issuer: `https://login.microsoftonline.com/${process.env.AZURE_AD_TENANT_ID || 'common'}/v2.0`,
+            tenantId,
             authorization: {
                 params: {
                     scope: 'openid profile email offline_access https://graph.microsoft.com/User.Read',
@@ -58,8 +58,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
                     const data = await res.json();
 
-                    // The backend returns { access_token, refresh_token, user: { id, email, role, ... } }
-                    // We return an object that matches the shape NextAuth expects in the jwt callback's 'user' or 'account'
                     return {
                         id: data.user.id,
                         email: data.user.email,
@@ -74,7 +72,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             }
         }),
     ],
-
 
     pages: {
         signIn: '/login',
@@ -146,7 +143,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                     token.role = u.role || 'employee';
                     token.userId = u.id;
                 } else if (account.provider === 'microsoft-entra-id') {
-                    // From MicrosoftEntraID signIn() callback stashing
+                    // From AzureAD signIn() callback stashing
                     const acc = account as any;
                     token.accessToken = acc.backendAccessToken;
                     token.refreshToken = acc.backendRefreshToken;
@@ -192,7 +189,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         strategy: 'jwt',
         maxAge: 7 * 24 * 60 * 60, // 7 days (matches refresh token)
     },
-});
+};
 
 /**
  * Refresh the access token using the backend refresh endpoint.

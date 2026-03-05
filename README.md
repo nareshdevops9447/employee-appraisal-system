@@ -3,7 +3,7 @@
 
 A comprehensive, full-stack Employee Appraisal System built with a microservices architecture. Features include role-based access control (RBAC), SSO authentication, appraisal workflows, goal management (OKRs), and reporting.
 
-![Architecture Overview](https://placeholder-image-url.com/architecture)
+![Architecture Overview](./docs/assets/architecture.png)
 
 ## 🏗 Architecture
 
@@ -50,6 +50,9 @@ The system is composed of the following services:
 
 The system is seeded with a demo organization.
 
+> [!WARNING]
+> **Security Notice**: These credentials and the `seed_demo.py` script are for local development and demonstration purposes ONLY. They must be removed or disabled before deploying to any production or publicly accessible environment.
+
 | Role | Email | Password |
 | :--- | :--- | :--- |
 | **CEO** | `alice.smith@example.com` | `password` |
@@ -64,7 +67,7 @@ The system is seeded with a demo organization.
 If you need to wipe the database and start fresh with the demo personas, run:
 
 ```bash
-.\reset-db.bat
+.\scripts\reset-db.bat
 ```
 
 This will automatically:
@@ -80,7 +83,7 @@ If you want to quickly see the results of a **completed** appraisal flow without
 
 1. Run the simulation script:
    ```bash
-   .\simulate-progression.bat
+   .\scripts\simulate-progression.bat
    ```
 2. This script will:
    - **Backdate David Wilson**: Sets his start date to 6 months ago (making him eligible for Annual cycle).
@@ -97,8 +100,8 @@ This allows you to demonstrate the "Final Results" and "Meeting Notes" screens i
 ├── backend/                # Consolidated Monolith Backend
 │   ├── app.py              # Application Entrypoint
 │   ├── models/             # Database Models
-│   ├── routes/             # API Routes
-│   └── services/           # Business Logic
+│   └── routes/             # API Routes
+├── scripts/                # Database Operations & Maintenance Scripts
 └── AZURE_AD_SETUP.md       # SSO Configuration Guide
 
 ## ⚠️ Environment Variables

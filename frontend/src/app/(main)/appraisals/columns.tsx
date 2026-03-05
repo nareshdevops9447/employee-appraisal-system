@@ -32,8 +32,10 @@ function getStatusVariant(status: string): "default" | "secondary" | "destructiv
     switch (status) {
         case "not_started":
             return "secondary";
-        case "self_assessment":
+        case "goals_approved":
+        case "self_assessment_in_progress":
         case "manager_review":
+        case "acknowledgement_pending":
             return "default";
         case "completed":
         case "closed":

@@ -1,8 +1,8 @@
-import { auth } from '@/auth';
+import { getServerSession } from '@/lib/auth-utils';
 import Link from 'next/link';
 
 export default async function Home() {
-    const session = await auth();
+    const session = await getServerSession();
 
     return (
         <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800 text-white">

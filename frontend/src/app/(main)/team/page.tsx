@@ -4,8 +4,10 @@
 import { useTeamMembers, TeamMember } from "@/hooks/use-team";
 import { useDepartments } from "@/hooks/use-departments";
 import { TeamMemberCard } from "@/components/team/team-member-card";
+import { PushTemplatesDialog } from "@/components/team/push-templates-dialog";
 import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Search, Send } from "lucide-react";
 import { useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -33,6 +35,7 @@ export default function TeamPage() {
     const [department, setDepartment] = useState("all");
     const [scope, setScope] = useState<'my-team' | 'all'>('my-team');
     const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
+    const [pushDialogOpen, setPushDialogOpen] = useState(false);
     const { data: departments } = useDepartments();
 
     const { data: members, isLoading } = useTeamMembers({
@@ -90,6 +93,12 @@ export default function TeamPage() {
                             <TabsTrigger value="all" className="text-xs">All</TabsTrigger>
                         </TabsList>
                     </Tabs>
+                    {scope === 'my-team' && (
+                        <Button variant="outline" onClick={() => setPushDialogOpen(true)}>
+                            <Send className="w-4 h-4 mr-2" />
+                            Push Goal Templates
+                        </Button>
+                    )}
                 </div>
             </div>
 
@@ -191,6 +200,12 @@ export default function TeamPage() {
                     )}
                 </SheetContent>
             </Sheet>
+
+            <PushTemplatesDialog
+                open={pushDialogOpen}
+                onOpenChange={setPushDialogOpen}
+                teamSize={members?.length ?? 0}
+            />
         </div>
     );
 }

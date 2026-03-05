@@ -1,6 +1,6 @@
 "use client";
 
-import { useGoal } from "@/hooks/use-goals";
+import { useGoal, useGoals } from "@/hooks/use-goals";
 import { useParams, useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Calendar, CheckCircle2, MoreVertical, Pencil, Target, User } from "lucide-react";
+import { Calendar, CheckCircle2, ChevronLeft, ChevronRight, MoreVertical, Pencil, Target, User, ArrowLeft, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { KeyResultItem } from "@/components/goals/key-result-item";
 import {
@@ -18,7 +18,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useSession } from "next-auth/react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useAddKeyResult } from "@/hooks/use-key-results";
 import { Input } from "@/components/ui/input";
@@ -46,23 +46,79 @@ export default function GoalDetailPage() {
     const router = useRouter();
     const id = (params?.id as string) || '';
     const { data: goal, isLoading } = useGoal(id);
+    const { data: allGoals } = useGoals({});
     const { data: session } = useSession();
     const { data: assignedUser } = useUser(goal?.employee_id);
     const deleteGoal = useDeleteGoal();
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+
+    // Prev/Next navigation
+    const { prevGoal, nextGoal, currentIndex, totalGoals } = useMemo(() => {
+        if (!allGoals || !id) return { prevGoal: null, nextGoal: null, currentIndex: -1, totalGoals: 0 };
+        const idx = allGoals.findIndex(g => g.id === id);
+        return {
+            prevGoal: idx > 0 ? allGoals[idx - 1] : null,
+            nextGoal: idx < allGoals.length - 1 ? allGoals[idx + 1] : null,
+            currentIndex: idx,
+            totalGoals: allGoals.length,
+        };
+    }, [allGoals, id]);
 
     // Check permissions
     const isOwner = session?.user?.id === goal?.employee_id;
     const isManager = session?.user?.id === assignedUser?.manager_id;
     const isAdmin = session?.user?.role === 'hr_admin' || session?.user?.role === 'super_admin';
     const canEditOrDelete = isOwner || isManager || isAdmin;
-
-
+    const isApproved = goal?.approval_status === 'approved';
+    const canEditStructure = canEditOrDelete && (!isApproved || isAdmin);
     if (isLoading) return <div className="space-y-6"><Skeleton className="h-12 w-1/2" /><Skeleton className="h-64 w-full" /></div>;
     if (!goal) return <div>Goal not found</div>;
 
     return (
         <div className="space-y-6">
+            {/* Breadcrumb + Prev/Next Navigation */}
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm">
+                    <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground hover:text-foreground" asChild>
+                        <Link href="/goals">
+                            <ArrowLeft className="h-4 w-4" />
+                            Goals
+                        </Link>
+                    </Button>
+                    <span className="text-muted-foreground">/</span>
+                    <span className="font-medium truncate max-w-[300px]">{goal.title}</span>
+                </div>
+                {totalGoals > 1 && (
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">
+                            {currentIndex + 1} of {totalGoals}
+                        </span>
+                        <div className="flex items-center gap-1">
+                            <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8"
+                                disabled={!prevGoal}
+                                onClick={() => prevGoal && router.push(`/goals/${prevGoal.id}`)}
+                                title={prevGoal ? `Previous: ${prevGoal.title}` : 'No previous goal'}
+                            >
+                                <ChevronLeft className="h-4 w-4" />
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8"
+                                disabled={!nextGoal}
+                                onClick={() => nextGoal && router.push(`/goals/${nextGoal.id}`)}
+                                title={nextGoal ? `Next: ${nextGoal.title}` : 'No next goal'}
+                            >
+                                <ChevronRight className="h-4 w-4" />
+                            </Button>
+                        </div>
+                    </div>
+                )}
+            </div>
+
             {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div className="space-y-1">
@@ -85,9 +141,9 @@ export default function GoalDetailPage() {
                         onEditClick={() => router.push(`/goals/${goal.id}/edit`)}
                     />
 
-                    {canEditOrDelete && (
+                    {canEditStructure && (
                         <Button variant="outline" size="sm" asChild>
-                            <Link href={`/goals/${goal.id}/edit`}>
+                            <Link href={`/goals/${goal?.id}/edit`}>
                                 <Pencil className="w-4 h-4 mr-2" /> Edit Goal
                             </Link>
                         </Button>
@@ -99,13 +155,22 @@ export default function GoalDetailPage() {
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                            {canEditOrDelete && (
-                                <DropdownMenuItem
-                                    className="text-destructive"
-                                    onClick={() => setShowDeleteDialog(true)}
-                                >
-                                    Delete Goal
-                                </DropdownMenuItem>
+                            {canEditStructure && (
+                                <>
+                                    <DropdownMenuItem asChild>
+                                        <Link href={`/goals/${goal?.id}/edit`}>
+                                            <Pencil className="w-4 h-4 mr-2" />
+                                            Edit
+                                        </Link>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                        className="text-destructive focus:text-destructive"
+                                        onClick={() => setShowDeleteDialog(true)}
+                                    >
+                                        <Trash2 className="w-4 h-4 mr-2" />
+                                        Delete Goal
+                                    </DropdownMenuItem>
+                                </>
                             )}
                         </DropdownMenuContent>
                     </DropdownMenu>
@@ -118,7 +183,7 @@ export default function GoalDetailPage() {
                         <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                         <AlertDialogDescription>
                             This action cannot be undone. This will permanently delete the goal
-                            "<strong>{goal.title}</strong>" and all its associated key results and comments.
+                            &quot;<strong>{goal.title}</strong>&quot; and all its associated key results and comments.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -145,7 +210,7 @@ export default function GoalDetailPage() {
 
                 {/* Left Column: Progress & Key Results */}
                 <div className="md:col-span-2 space-y-6">
-                    <Card>
+                    <Card className="border-0 shadow-md">
                         <CardHeader>
                             <CardTitle>Progress</CardTitle>
                         </CardHeader>
@@ -160,11 +225,10 @@ export default function GoalDetailPage() {
                         </CardContent>
                     </Card>
 
-                    <Card>
+                    <Card className="border-0 shadow-md">
                         <CardHeader className="flex flex-row items-center justify-between pb-2">
                             <CardTitle>Key Results</CardTitle>
-                            {canEditOrDelete && <AddKeyResultDialog goalId={goal.id} />}
-
+                            {canEditStructure && <AddKeyResultDialog goalId={goal.id} />}
                         </CardHeader>
                         <CardContent className="space-y-4">
                             {goal.key_results && goal.key_results.length > 0 ? (
@@ -190,7 +254,7 @@ export default function GoalDetailPage() {
 
                 {/* Right Column: Meta Info */}
                 <div className="space-y-6">
-                    <Card>
+                    <Card className="border-0 shadow-md">
                         <CardHeader>
                             <CardTitle>Details</CardTitle>
                         </CardHeader>
@@ -210,6 +274,18 @@ export default function GoalDetailPage() {
                                 </div>
                             </div>
                             <Separator />
+                            {goal.category === 'performance' && goal.weight !== undefined && (
+                                <>
+                                    <div className="flex items-center gap-2">
+                                        <Target className="w-4 h-4 text-muted-foreground" />
+                                        <div>
+                                            <p className="font-medium">Total Goal Weight</p>
+                                            <p className="text-muted-foreground">{goal.weight}%</p>
+                                        </div>
+                                    </div>
+                                    <Separator />
+                                </>
+                            )}
                             <div className="flex items-center gap-2">
                                 <User className="w-4 h-4 text-muted-foreground" />
                                 <div>

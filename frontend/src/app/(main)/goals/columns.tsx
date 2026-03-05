@@ -6,7 +6,7 @@ import { Goal } from "@/types/goal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { ArrowUpDown, MoreHorizontal, ExternalLink, Pencil } from "lucide-react";
+import { ArrowUpDown, MoreHorizontal, ExternalLink, Pencil, Globe, Building2 } from "lucide-react";
 import Link from "next/link";
 import {
     DropdownMenu,
@@ -23,6 +23,29 @@ export const columns: ColumnDef<Goal>[] = [
         header: "Title",
         cell: ({ row }) => {
             return <div className="font-medium">{row.getValue("title")}</div>
+        }
+    },
+    {
+        id: "employee",
+        header: "Employee",
+        cell: ({ row }) => {
+            const goal = row.original;
+            return <div className="text-sm text-muted-foreground">{goal.employee_name || '—'}</div>
+        }
+    },
+    {
+        id: "scope",
+        header: "Scope",
+        cell: ({ row }) => {
+            const goal = row.original;
+            return (
+                <Badge variant={goal.department_id ? "secondary" : "outline"} className="text-xs flex items-center gap-1 w-fit">
+                    {goal.department_id
+                        ? <><Building2 className="w-3 h-3" />{goal.department_name}</>
+                        : <><Globe className="w-3 h-3" />Org-wide</>
+                    }
+                </Badge>
+            );
         }
     },
     {

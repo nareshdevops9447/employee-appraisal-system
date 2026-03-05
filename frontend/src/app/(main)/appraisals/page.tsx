@@ -8,8 +8,11 @@ import { GoalApprovalList } from "@/components/appraisal/GoalApprovalList";
 import { SelfAssessmentForm } from "@/components/appraisal/SelfAssessmentForm";
 import { ManagerReviewForm } from "@/components/appraisal/ManagerReviewForm";
 import { FinalSummary } from "@/components/appraisal/FinalSummary";
+import { AcknowledgementForm } from "@/components/appraisal/acknowledgement-form";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Loader2, AlertCircle, ClipboardList } from "lucide-react";
+import Link from "next/link";
 import type { AppraisalStatus } from "@/types/appraisal";
 
 export default function AppraisalWorkflowPage() {
@@ -52,10 +55,15 @@ export default function AppraisalWorkflowPage() {
             <div className="flex flex-col items-center justify-center py-20 gap-3">
                 <ClipboardList className="h-10 w-10 text-muted-foreground" />
                 <p className="font-medium text-lg">No Active Appraisal</p>
-                <p className="text-sm text-muted-foreground max-w-md text-center">
+                <p className="text-sm text-muted-foreground max-w-md text-center mb-4">
                     There is no active appraisal cycle for you right now.
                     Your HR administrator will initiate one when it's time.
                 </p>
+                <Button variant="outline" asChild>
+                    <Link href="/appraisals/history">
+                        View Appraisal History
+                    </Link>
+                </Button>
             </div>
         );
     }
@@ -65,20 +73,29 @@ export default function AppraisalWorkflowPage() {
     const status = appraisal.status as AppraisalStatus;
 
     // Determine if user is the employee or the manager for this appraisal
-    const isEmployee = appraisal.employee_id === userId;
-    const isManager = appraisal.manager_id === userId;
+    const isEmployee = String(appraisal.employee_id) === String(userId);
+    const isManager = String(appraisal.manager_id) === String(userId);
 
     return (
         <div className="space-y-8 max-w-4xl mx-auto">
             {/* Page header */}
-            <div>
-                <h1 className="text-3xl font-bold tracking-tight">
-                    {isEmployee ? "My Appraisal" : `Appraisal Review`}
-                </h1>
-                {appraisal.cycle_name && (
-                    <p className="text-muted-foreground">
-                        {appraisal.cycle_name} — {formatType(appraisal.cycle_type)}
-                    </p>
+            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl font-bold tracking-tight">
+                        {isEmployee ? "My Appraisal" : `Appraisal Review`}
+                    </h1>
+                    {appraisal.cycle_name && (
+                        <p className="text-muted-foreground">
+                            {appraisal.cycle_name} — {formatType(appraisal.cycle_type)}
+                        </p>
+                    )}
+                </div>
+                {isEmployee && (
+                    <Button variant="outline" asChild>
+                        <Link href="/appraisals/history">
+                            View History
+                        </Link>
+                    </Button>
                 )}
             </div>
 
@@ -126,12 +143,22 @@ function StatusView({
                     <CardContent className="py-12 text-center">
                         <ClipboardList className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                         <h3 className="text-lg font-semibold mb-1">
-                            Waiting for Goals
+                            {isManager ? "Goal Setting In Progress" : "Waiting for Goals"}
                         </h3>
-                        <p className="text-muted-foreground">
-                            Your manager will assign performance goals for this
-                            review cycle. You'll be notified when they're ready.
+                        <p className="text-muted-foreground max-w-md mx-auto">
+                            {isManager
+                                ? "Assign goals from the Team Goals tab, or click below to review and finalize this employee's goals."
+                                : "Your manager will assign performance goals for this review cycle. You'll be notified when they're ready."}
                         </p>
+                        {isManager && (
+                            <div className="mt-6 flex justify-center">
+                                <Button asChild>
+                                    <Link href={`/appraisals/${appraisal.id}`}>
+                                        Review & Finalize Goals
+                                    </Link>
+                                </Button>
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
             );
@@ -199,6 +226,25 @@ function StatusView({
                                 ).toLocaleString()}
                             </p>
                         )}
+                    </CardContent>
+                </Card>
+            );
+
+        case "acknowledgement_pending":
+            if (isEmployee) {
+                return (
+                    <AcknowledgementForm appraisal={appraisal} goals={goals} />
+                );
+            }
+            return (
+                <Card>
+                    <CardContent className="py-12 text-center">
+                        <h3 className="text-lg font-semibold mb-1">
+                            Awaiting Employee Sign-Off
+                        </h3>
+                        <p className="text-muted-foreground">
+                            You've submitted the review. Waiting for the employee to acknowledge and sign off.
+                        </p>
                     </CardContent>
                 </Card>
             );

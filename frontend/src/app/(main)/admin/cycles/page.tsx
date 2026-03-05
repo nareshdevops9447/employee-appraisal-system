@@ -1,8 +1,9 @@
 "use client";
 
-import { useCycles, useActivateCycle, useStopCycle, useDeleteCycle } from "@/hooks/use-cycles";
+import { useCycles, useActivateCycle, useStopCycle, useDeleteCycle, useSyncCycleUsers } from "@/hooks/use-cycles";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ActivateCycleDialog } from "@/components/admin/activate-cycle-dialog";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { Plus, Play, Square, Loader2, Pencil, Trash2 } from "lucide-react";
@@ -22,6 +23,7 @@ export default function CyclesPage() {
     const activateCycle = useActivateCycle();
     const stopCycle = useStopCycle();
     const deleteCycle = useDeleteCycle();
+    const syncUsers = useSyncCycleUsers();
 
     const handleActivate = (id: string) => {
         activateCycle.mutate({ id });
@@ -31,6 +33,10 @@ export default function CyclesPage() {
         if (confirm("Are you sure you want to stop this cycle?")) {
             stopCycle.mutate(id);
         }
+    };
+
+    const handleSync = (id: string, criteria: any) => {
+        syncUsers.mutate({ id, criteria });
     };
 
     const handleDelete = (id: string) => {
@@ -126,14 +132,21 @@ export default function CyclesPage() {
                                             </>
                                         )}
                                         {cycle.status === "active" && (
-                                            <Button
-                                                size="sm"
-                                                variant="destructive"
-                                                onClick={() => handleStop(cycle.id)}
-                                                disabled={stopCycle.isPending}
-                                            >
-                                                <Square className="mr-2 h-4 w-4" /> Stop
-                                            </Button>
+                                            <>
+                                                <ActivateCycleDialog
+                                                    cycleId={cycle.id}
+                                                    onActivate={handleSync}
+                                                    isSync={true}
+                                                />
+                                                <Button
+                                                    size="sm"
+                                                    variant="destructive"
+                                                    onClick={() => handleStop(cycle.id)}
+                                                    disabled={stopCycle.isPending}
+                                                >
+                                                    <Square className="mr-2 h-4 w-4" /> Stop
+                                                </Button>
+                                            </>
                                         )}
                                         {/* Allow delete for completed? Maybe, if safe. For now, only draft or we check backend error. */}
                                         {cycle.status === "completed" && (

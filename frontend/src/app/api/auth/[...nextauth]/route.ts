@@ -1,6 +1,9 @@
 /**
- * NextAuth.js v5 API route handler.
+ * NextAuth.js v4 API route handler.
  */
-import { handlers } from '@/auth';
+import NextAuth from 'next-auth';
+import { authOptions } from '@/auth';
 
-export const { GET, POST } = handlers;
+const handler = NextAuth(authOptions);
+
+export { handler as GET, handler as POST };

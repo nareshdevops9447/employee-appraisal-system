@@ -37,6 +37,7 @@ const goalFormSchema = z.object({
     description: z.string().max(2000).optional(),
     category: z.enum(['performance', 'development', 'project', 'mission_aligned']),
     priority: z.enum(['low', 'medium', 'high', 'critical']),
+    weight: z.number().min(0).max(100).optional(),
     start_date: z.date(),
     target_date: z.date(),
     employee_id: z.string().optional(),
@@ -56,16 +57,19 @@ interface GoalFormProps {
     isLoading?: boolean;
     employeeId?: string | null;
     teamMembers?: TeamMember[];
+    onSaveAndSubmit?: (data: GoalFormValues) => void;
+    isSubmitLoading?: boolean;
 }
 
-export function GoalForm({ initialData, onSubmit, isLoading, employeeId, teamMembers }: GoalFormProps) {
+export function GoalForm({ initialData, onSubmit, isLoading, employeeId, teamMembers, onSaveAndSubmit, isSubmitLoading }: GoalFormProps) {
     const form = useForm<GoalFormValues>({
         resolver: zodResolver(goalFormSchema),
         defaultValues: {
             title: initialData?.title || "",
             description: initialData?.description || "",
-            category: initialData?.category || "performance",
+            category: initialData?.category || "development",
             priority: initialData?.priority || "medium",
+            weight: initialData?.weight || 0,
             start_date: initialData?.start_date ? new Date(initialData.start_date) : new Date(),
             target_date: initialData?.target_date ? new Date(initialData.target_date) : undefined,
             employee_id: employeeId || initialData?.employee_id || undefined,
@@ -83,11 +87,20 @@ export function GoalForm({ initialData, onSubmit, isLoading, employeeId, teamMem
         name: "key_results",
     });
 
-    const handleSubmit = (data: GoalFormValues) => {
-        // Sanitize "myself" value to undefined
+    const handleSaveAndSubmit = (data: GoalFormValues) => {
+        if (!onSaveAndSubmit) return;
         const payload = { ...data };
         if (payload.employee_id === "myself") {
-            payload.employee_id = undefined;
+            payload.employee_id = null as any;
+        }
+        onSaveAndSubmit(payload);
+    };
+
+    const handleSubmit = (data: GoalFormValues) => {
+        // Sanitize "myself" value to null
+        const payload = { ...data };
+        if (payload.employee_id === "myself") {
+            payload.employee_id = null as any;
         }
         onSubmit(payload);
     };
@@ -156,55 +169,77 @@ export function GoalForm({ initialData, onSubmit, isLoading, employeeId, teamMem
                             )}
                         />
 
-                        <div className="grid grid-cols-2 gap-4">
-                            <FormField
-                                control={form.control}
-                                name="category"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Category</FormLabel>
-                                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                            <FormControl>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select category" />
-                                                </SelectTrigger>
-                                            </FormControl>
-                                            <SelectContent>
-                                                <SelectItem value="performance">Performance</SelectItem>
-                                                <SelectItem value="development">Development</SelectItem>
-                                                <SelectItem value="project">Project</SelectItem>
-                                                <SelectItem value="mission_aligned">Mission Aligned</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
+                        <FormField
+                            control={form.control}
+                            name="category"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Category</FormLabel>
+                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                        <FormControl>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select category" />
+                                            </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            <SelectItem value="performance" disabled={!initialData || initialData.category !== 'performance'}>Performance (Auto-provisioned)</SelectItem>
+                                            <SelectItem value="development">Development</SelectItem>
+                                            <SelectItem value="project">Project</SelectItem>
+                                            <SelectItem value="mission_aligned">Mission Aligned</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
 
+                        <FormField
+                            control={form.control}
+                            name="priority"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Priority</FormLabel>
+                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                        <FormControl>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select priority" />
+                                            </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            <SelectItem value="low">Low</SelectItem>
+                                            <SelectItem value="medium">Medium</SelectItem>
+                                            <SelectItem value="high">High</SelectItem>
+                                            <SelectItem value="critical">Critical</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+
+                        {(initialData?.goal_type === "performance" || initialData?.category === "performance" || form.watch("category") === "performance") && (
                             <FormField
                                 control={form.control}
-                                name="priority"
+                                name="weight"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Priority</FormLabel>
-                                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                            <FormControl>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select priority" />
-                                                </SelectTrigger>
-                                            </FormControl>
-                                            <SelectContent>
-                                                <SelectItem value="low">Low</SelectItem>
-                                                <SelectItem value="medium">Medium</SelectItem>
-                                                <SelectItem value="high">High</SelectItem>
-                                                <SelectItem value="critical">Critical</SelectItem>
-                                            </SelectContent>
-                                        </Select>
+                                        <FormLabel>Weight (%)</FormLabel>
+                                        <FormControl>
+                                            <Input
+                                                type="number"
+                                                placeholder="e.g. 20"
+                                                {...field}
+                                                onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
+                                            />
+                                        </FormControl>
+                                        <FormDescription>
+                                            Weights for all performance goals must total exactly 100%.
+                                        </FormDescription>
                                         <FormMessage />
                                     </FormItem>
                                 )}
                             />
-                        </div>
+                        )}
                     </div>
 
                     <div className="space-y-6">
@@ -365,9 +400,20 @@ export function GoalForm({ initialData, onSubmit, isLoading, employeeId, teamMem
                     <Button type="button" variant="secondary" onClick={() => window.history.back()}>
                         Cancel
                     </Button>
-                    <Button type="submit" disabled={isLoading}>
+                    <Button type="submit" disabled={isLoading || isSubmitLoading}>
                         {isLoading ? "Saving..." : "Save Goal"}
                     </Button>
+                    {onSaveAndSubmit && (!initialData || ['draft', 'revision_requested'].includes(initialData?.approval_status || '')) && (
+                        <Button
+                            type="button"
+                            variant="default"
+                            className="bg-green-600 hover:bg-green-700 text-white"
+                            onClick={form.handleSubmit(handleSaveAndSubmit)}
+                            disabled={isLoading || isSubmitLoading}
+                        >
+                            {isSubmitLoading ? "Submitting..." : "Save & Submit"}
+                        </Button>
+                    )}
                 </div>
             </form>
         </Form>

@@ -30,10 +30,13 @@ export interface GoalComment {
 export interface Goal {
     id: string;
     employee_id: string;
+    employee_name?: string | null;
     title: string;
     description?: string;
     category: GoalCategory;
     priority: GoalPriority;
+    weight?: number;
+    goal_type: 'performance' | 'development';
     status: GoalStatus;
     progress_percentage: number;
     start_date: string;
@@ -47,7 +50,10 @@ export interface Goal {
     approval_status: string;
     approved_date?: string;
     rejected_reason?: string;
+    manager_comment?: string;
     version_number: number;
+    department_id?: string | null;
+    department_name?: string | null;
     created_at: string;
     updated_at: string;
 

@@ -1,14 +1,15 @@
 /**
  * Auth utilities for server and client components.
  */
-import { auth } from '@/auth';
+import { getServerSession as _getServerSession } from 'next-auth';
+import { authOptions } from '@/auth';
 
 /**
  * Get the current session in a server component or API route.
  * Usage: const session = await getServerSession();
  */
 export async function getServerSession() {
-    return await auth();
+    return await _getServerSession(authOptions);
 }
 
 // Re-export useSession for client components

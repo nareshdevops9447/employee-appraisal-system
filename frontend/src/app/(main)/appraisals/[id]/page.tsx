@@ -2,21 +2,23 @@
 
 import { useState } from "react";
 import { useParams } from "next/navigation";
-import { useAppraisal } from "@/hooks/use-appraisals";
+import { useAppraisal, useFinalizeGoals } from "@/hooks/use-appraisals";
 import { useApproveGoal, useRejectGoal } from "@/hooks/use-goal-approval";
+import { useRaiseAppeal } from "@/hooks/use-appeals";
 import { useSession } from "next-auth/react";
 import { WorkflowStepper } from "@/components/appraisal/WorkflowStepper";
 import { SelfAssessmentForm } from "@/components/appraisal/SelfAssessmentForm";
 import { ManagerReviewForm } from "@/components/appraisal/ManagerReviewForm";
 import { AcknowledgementForm } from "@/components/appraisal/acknowledgement-form";
+import { FinalSummary } from "@/components/appraisal/FinalSummary";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Info, CheckCircle2, XCircle, Target, Clock, AlertTriangle } from "lucide-react";
-import { GoalForAssessment } from "@/types/appraisal";
+import { Info, CheckCircle2, XCircle, Target, Clock, AlertTriangle, MessageSquareWarning } from "lucide-react";
+import type { GoalForAssessment } from "@/types/appraisal";
 
 function formatStatus(status: string) {
     return status
@@ -131,6 +133,10 @@ export default function AppraisalDetailPage() {
     const { data: appraisal, isLoading } = useAppraisal(id);
     const approveGoal = useApproveGoal();
     const rejectGoal = useRejectGoal();
+    const raiseAppeal = useRaiseAppeal();
+    const finalizeGoals = useFinalizeGoals();
+    const [appealReason, setAppealReason] = useState("");
+    const [showAppealForm, setShowAppealForm] = useState(false);
 
     if (isLoading) {
         return <AppraisalDetailSkeleton />;
@@ -140,15 +146,29 @@ export default function AppraisalDetailPage() {
         return <div>Appraisal not found</div>;
     }
 
-    const isEmployee = session?.user?.id === appraisal.employee_id;
-    const isManager = session?.user?.id === appraisal.manager_id;
+    const isEmployee = String(session?.user?.id) === String(appraisal.employee_id);
+    const isManager = String(session?.user?.id) === String(appraisal.manager_id);
 
-    // Goal readiness
-    const readiness = appraisal.goal_readiness;
-    const goalsReady = readiness?.ready || false;
-    const pendingGoals = readiness?.goals?.filter((g: GoalForAssessment) => g.approval_status === 'pending_approval') || [];
-    const approvedGoals = readiness?.goals?.filter((g: GoalForAssessment) => g.approval_status === 'approved') || [];
-    const hasAnyGoals = (readiness?.total || 0) > 0;
+    // Goal readiness dynamically calculated since backend returns appraisal.goals
+    const goalsArray: GoalForAssessment[] = (appraisal as any).goals || [];
+    const totalGoals = goalsArray.length;
+    const approvedCount = goalsArray.filter(g => g.approval_status === 'approved').length;
+    const pendingCount = goalsArray.filter(g => g.approval_status === 'pending_approval').length;
+    const rejectedCount = goalsArray.filter(g => g.approval_status === 'rejected').length;
+
+    const readiness = {
+        ready: totalGoals > 0 && approvedCount === totalGoals,
+        total: totalGoals,
+        approved: approvedCount,
+        pending: pendingCount,
+        rejected: rejectedCount,
+        goals: goalsArray
+    };
+
+    const goalsReady = readiness.ready;
+    const pendingGoals = goalsArray.filter(g => g.approval_status === 'pending_approval');
+    const approvedGoals = goalsArray.filter(g => g.approval_status === 'approved');
+    const hasAnyGoals = totalGoals > 0;
 
     // Determine what to show in the main action area
     let ActionComponent: any = null;
@@ -162,14 +182,10 @@ export default function AppraisalDetailPage() {
                 // Employee has goals pending their approval
                 showGoalApproval = true;
                 actionTitle = "Review & Approve Goals";
-            } else if (goalsReady) {
-                // All goals approved — can start self-assessment
-                ActionComponent = SelfAssessmentForm;
-                actionTitle = "Start Self Assessment";
             } else {
-                // No goals yet or some are draft
+                // No goals yet or some are draft (or waiting for manager to finalize)
                 showWaitingForGoals = true;
-                actionTitle = "Waiting for Goals";
+                actionTitle = goalsReady ? "Waiting for Manager to Finalize Goals" : "Goal Setting Phase";
             }
         } else if (isManager) {
             actionTitle = hasAnyGoals
@@ -178,29 +194,44 @@ export default function AppraisalDetailPage() {
         } else {
             actionTitle = "Goal Setting In Progress";
         }
-    } else if (appraisal.status === 'self_assessment') {
+    } else if (appraisal.status === 'goals_pending_approval') {
+        if (isManager) {
+            actionTitle = "Goals Pending Employee Approval";
+        } else {
+            showGoalApproval = pendingGoals.length > 0;
+            actionTitle = pendingGoals.length > 0 ? "Review & Approve Goals" : "Goals Pending Approval";
+        }
+    } else if (appraisal.status === 'goals_approved') {
+        if (isManager) {
+            actionTitle = "Review & Finalize Goals";
+        } else {
+            actionTitle = "Goal Setting In Progress";
+        }
+    } else if (appraisal.status === 'self_assessment_in_progress') {
         if (isEmployee) {
             ActionComponent = SelfAssessmentForm;
             actionTitle = "Complete Self Assessment";
         } else {
-            actionTitle = "Waiting for Employee";
+            actionTitle = "Waiting for Employee Self Assessment";
         }
     } else if (appraisal.status === 'manager_review') {
         if (isManager) {
             ActionComponent = ManagerReviewForm;
             actionTitle = "Complete Manager Review";
         } else {
-            actionTitle = "Waiting for Manager";
+            actionTitle = "Waiting for Manager Review";
         }
-    } else if (appraisal.status === 'meeting_scheduled' || appraisal.status === 'meeting_completed') {
+    } else if (appraisal.status === 'calibration') {
+        actionTitle = "Under HR Calibration";
+    } else if (appraisal.status === 'acknowledgement_pending') {
         if (isEmployee) {
             ActionComponent = AcknowledgementForm;
-            actionTitle = "Acknowledge Review";
+            actionTitle = "Sign Off on Your Review";
         } else {
-            actionTitle = "Waiting for Acknowledgement";
+            actionTitle = "Waiting for Employee Sign-Off";
         }
-    } else if (appraisal.status === 'acknowledged' || appraisal.status === 'completed') {
-        actionTitle = "Review Completed";
+    } else if (appraisal.status === 'completed') {
+        actionTitle = "Appraisal Completed";
     }
 
     // Use flat fields from API response
@@ -243,6 +274,43 @@ export default function AppraisalDetailPage() {
                 </CardContent>
             </Card>
 
+            {/* Deadline warning banner — shown when deadline is within 3 days */}
+            {(() => {
+                const selfDeadlineDate = appraisal.self_assessment_deadline ? new Date(appraisal.self_assessment_deadline) : null;
+                const mgrDeadlineDate = appraisal.manager_review_deadline ? new Date(appraisal.manager_review_deadline) : null;
+                const now = Date.now();
+                const THREE_DAYS_MS = 3 * 86400000;
+
+                const selfNearDeadline = isEmployee
+                    && selfDeadlineDate
+                    && ['goals_approved', 'self_assessment_in_progress'].includes(appraisal.status)
+                    && (selfDeadlineDate.getTime() - now) < THREE_DAYS_MS
+                    && (selfDeadlineDate.getTime() - now) > 0;
+
+                const mgrNearDeadline = isManager
+                    && mgrDeadlineDate
+                    && appraisal.status === 'manager_review'
+                    && (mgrDeadlineDate.getTime() - now) < THREE_DAYS_MS
+                    && (mgrDeadlineDate.getTime() - now) > 0;
+
+                if (!selfNearDeadline && !mgrNearDeadline) return null;
+
+                return (
+                    <Alert className="border-amber-400 bg-amber-50 text-amber-900">
+                        <AlertTriangle className="h-4 w-4 text-amber-600" />
+                        <AlertTitle className="text-amber-800">Deadline Approaching</AlertTitle>
+                        <AlertDescription className="text-amber-700">
+                            {selfNearDeadline && (
+                                <span>Your self-assessment is due by <strong>{selfDeadlineDate!.toLocaleDateString()}</strong>. Please complete it soon.</span>
+                            )}
+                            {mgrNearDeadline && (
+                                <span>The manager review deadline is <strong>{mgrDeadlineDate!.toLocaleDateString()}</strong>. Please submit your review soon.</span>
+                            )}
+                        </AlertDescription>
+                    </Alert>
+                );
+            })()}
+
             <div className="grid gap-6 md:grid-cols-3">
                 <Card className="md:col-span-2">
                     <CardHeader>
@@ -265,7 +333,7 @@ export default function AppraisalDetailPage() {
                                         key={goal.id}
                                         goal={goal}
                                         isLoading={approveGoal.isPending || rejectGoal.isPending}
-                                        onApprove={() => approveGoal.mutate(goal.id)}
+                                        onApprove={() => approveGoal.mutate({ goalId: goal.id })}
                                         onReject={(reason) => rejectGoal.mutate({ goalId: goal.id, reason })}
                                     />
                                 ))}
@@ -283,10 +351,11 @@ export default function AppraisalDetailPage() {
                         {showWaitingForGoals && (
                             <Alert>
                                 <Clock className="h-4 w-4" />
-                                <AlertTitle>Waiting for Goals</AlertTitle>
+                                <AlertTitle>{goalsReady ? "Waiting for Manager" : "Waiting for Goals"}</AlertTitle>
                                 <AlertDescription>
-                                    Your manager needs to assign goals to you before you can start the self-assessment.
-                                    You will be notified when goals are ready for your review.
+                                    {goalsReady
+                                        ? "Your goals are approved. Waiting for your manager to explicitly finalize the goal-setting phase before you can begin the self-assessment."
+                                        : "Your manager needs to assign goals to you before you can start the self-assessment. You will be notified when goals are ready for your review."}
                                 </AlertDescription>
                             </Alert>
                         )}
@@ -303,9 +372,9 @@ export default function AppraisalDetailPage() {
                             </Alert>
                         )}
 
-                        {/* Manager view: goal progress */}
-                        {appraisal.status === 'not_started' && isManager && hasAnyGoals && (
-                            <div className="space-y-3">
+                        {/* Manager view: goal progress and Finzlize button */}
+                        {['not_started', 'goals_pending_approval', 'goals_approved'].includes(appraisal.status) && isManager && hasAnyGoals && !appraisal.goals_finalized && (
+                            <div className="space-y-4">
                                 <Alert>
                                     <Info className="h-4 w-4" />
                                     <AlertTitle>Goal Setting Progress</AlertTitle>
@@ -315,11 +384,33 @@ export default function AppraisalDetailPage() {
                                         {(readiness?.rejected || 0) > 0 && ` ${readiness?.rejected} rejected.`}
                                     </AlertDescription>
                                 </Alert>
+
+                                <Card className="border-primary/20 bg-primary/5">
+                                    <CardContent className="pt-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                                        <div>
+                                            <h4 className="font-semibold text-lg flex items-center gap-2">
+                                                <CheckCircle2 className="w-5 h-5 text-primary" />
+                                                Finalize Goal Setting
+                                            </h4>
+                                            <p className="text-sm text-muted-foreground mt-1">
+                                                Click this once the employee has added all their goals and you have approved them. This will lock the goal setting phase and move the appraisal to Self-Assessment.
+                                            </p>
+                                        </div>
+                                        <Button
+                                            onClick={() => finalizeGoals.mutate(appraisal.id)}
+                                            disabled={finalizeGoals.isPending}
+                                            className="shrink-0 whitespace-nowrap"
+                                        >
+                                            <CheckCircle2 className="w-4 h-4 mr-2" />
+                                            {finalizeGoals.isPending ? "Finalizing..." : "Finalize Goals"}
+                                        </Button>
+                                    </CardContent>
+                                </Card>
                             </div>
                         )}
 
                         {/* Action form (SelfAssessment, ManagerReview, Acknowledgement) */}
-                        {ActionComponent && <ActionComponent appraisal={appraisal} />}
+                        {ActionComponent && <ActionComponent appraisal={appraisal} goals={readiness?.goals || []} />}
 
                         {/* Fallback status message for non-participants */}
                         {!ActionComponent && !showGoalApproval && !showWaitingForGoals
@@ -328,54 +419,78 @@ export default function AppraisalDetailPage() {
                                     <Info className="h-4 w-4" />
                                     <AlertTitle>Status</AlertTitle>
                                     <AlertDescription>
-                                        {(appraisal.status === 'not_started' || appraisal.status === 'self_assessment') && !isEmployee && "The employee is currently completing their self-assessment."}
+                                        {(appraisal.status === 'not_started' || appraisal.status === 'goals_approved' || appraisal.status === 'self_assessment_in_progress') && !isEmployee && "The employee is currently completing their self-assessment."}
                                         {appraisal.status === 'manager_review' && !isManager && "The manager is currently reviewing the assessment."}
-                                        {(appraisal.status === 'completed' || appraisal.status === 'acknowledged') && "This appraisal has been completed."}
-                                        {(appraisal.status === 'meeting_scheduled' || appraisal.status === 'meeting_completed') && !isEmployee && "Waiting for the employee to acknowledge."}
+                                        {appraisal.status === 'calibration' && "This appraisal is currently under HR calibration. The employee and manager will be notified once complete."}
+                                        {appraisal.status === 'completed' && "This appraisal has been completed."}
+                                        {appraisal.status === 'acknowledgement_pending' && !isEmployee && "Waiting for the employee to sign off."}
                                     </AlertDescription>
                                 </Alert>
                             )}
 
-                        {/* Read-only completed sections */}
-                        {!['not_started', 'self_assessment'].includes(appraisal.status) && appraisal.self_assessment && (
-                            <div className="mt-8 pt-8 border-t">
-                                <h3 className="font-semibold mb-2">Self Assessment Summary</h3>
-                                <div className="space-y-3">
-                                    {typeof appraisal.self_assessment === 'object' && !Array.isArray(appraisal.self_assessment)
-                                        ? Object.entries(appraisal.self_assessment).map(([goalId, data]: [string, any]) => {
-                                            const goal = readiness?.goals?.find((g: GoalForAssessment) => g.id === goalId);
-                                            return (
-                                                <div key={goalId} className="bg-muted/50 p-3 rounded-md">
-                                                    <p className="font-medium text-sm">{goal?.title || goalId}</p>
-                                                    <div className="flex gap-4 text-xs text-muted-foreground mt-1">
-                                                        <span>Rating: {data.self_rating}/5</span>
-                                                        <span>Progress: {data.progress}%</span>
-                                                    </div>
-                                                    {data.comments && <p className="text-sm mt-1">{data.comments}</p>}
-                                                </div>
-                                            );
-                                        })
-                                        : <div className="bg-muted/50 p-4 rounded-md whitespace-pre-wrap">
-                                            {String(appraisal.self_assessment)}
-                                        </div>
-                                    }
+                        {/* Read-only review: show for manager/HR on acknowledgement_pending,
+                            and for everyone when completed.
+                            Employees on acknowledgement_pending see FinalSummary inside AcknowledgementForm. */}
+                        {(appraisal.status === 'completed' ||
+                            (appraisal.status === 'acknowledgement_pending' && !isEmployee)) && (
+                                <div className="mt-8 pt-8 border-t">
+                                    <ManagerReviewForm
+                                        appraisal={appraisal}
+                                        goals={readiness?.goals || []}
+                                        readOnly={true}
+                                    />
                                 </div>
-                            </div>
-                        )}
+                            )}
 
-                        {(appraisal.status === 'completed' || appraisal.status === 'acknowledged') && appraisal.manager_assessment && (
-                            <div className="mt-8 pt-8 border-t">
-                                <h3 className="font-semibold mb-2">Manager Review</h3>
-                                <div className="bg-muted/50 p-4 rounded-md space-y-2">
-                                    {appraisal.overall_rating && (
-                                        <div className="font-medium">Rating: {appraisal.overall_rating} / 5</div>
-                                    )}
-                                    <div className="whitespace-pre-wrap">
-                                        {typeof appraisal.manager_assessment === 'object'
-                                            ? JSON.stringify(appraisal.manager_assessment, null, 2)
-                                            : appraisal.manager_assessment || "No comments."}
+                        {/* Appeal section — only for employees on completed appraisals */}
+                        {appraisal.status === 'completed' && isEmployee && (
+                            <div className="mt-8 pt-6 border-t">
+                                {!showAppealForm ? (
+                                    <div className="flex items-center justify-between">
+                                        <p className="text-sm text-muted-foreground">
+                                            If you believe the outcome is inaccurate, you may raise a formal appeal.
+                                        </p>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setShowAppealForm(true)}
+                                        >
+                                            <MessageSquareWarning className="mr-2 h-4 w-4" />
+                                            Raise an Appeal
+                                        </Button>
                                     </div>
-                                </div>
+                                ) : (
+                                    <Card className="border-amber-300 bg-amber-50/50">
+                                        <CardHeader className="pb-2">
+                                            <CardTitle className="text-base flex items-center gap-2">
+                                                <MessageSquareWarning className="h-5 w-5 text-amber-600" />
+                                                Raise an Appeal
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="space-y-4">
+                                            <p className="text-sm text-muted-foreground">
+                                                Describe why you believe this appraisal outcome is inaccurate. HR will review your appeal.
+                                            </p>
+                                            <Textarea
+                                                value={appealReason}
+                                                onChange={(e) => setAppealReason(e.target.value)}
+                                                placeholder="Describe your concern in detail..."
+                                                rows={4}
+                                            />
+                                            <div className="flex gap-2">
+                                                <Button
+                                                    onClick={() => raiseAppeal.mutate({ appraisalId: appraisal.id, reason: appealReason }, { onSuccess: () => setShowAppealForm(false) })}
+                                                    disabled={!appealReason.trim() || raiseAppeal.isPending}
+                                                >
+                                                    {raiseAppeal.isPending ? "Submitting..." : "Submit Appeal"}
+                                                </Button>
+                                                <Button variant="ghost" onClick={() => setShowAppealForm(false)}>
+                                                    Cancel
+                                                </Button>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                )}
                             </div>
                         )}
                     </CardContent>

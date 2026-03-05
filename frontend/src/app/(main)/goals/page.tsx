@@ -7,16 +7,19 @@ import { DataTable } from "@/components/shared/data-table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, LayoutGrid, List as ListIcon, Upload, Download, FileSpreadsheet, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Plus, LayoutGrid, List as ListIcon, Upload, Download, FileSpreadsheet, CheckCircle2, AlertTriangle, Target, Clock } from "lucide-react";
 import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GoalFilters } from "@/components/goals/goal-filters";
 import { GoalCard } from "@/components/goals/goal-card";
+import { TeamGoalsPanel } from "@/components/goals/team-goals-panel";
 import { useSearchParams } from "next/navigation";
 import { useState, useRef } from "react";
 import { GoalProgressRing } from "@/components/goals/goal-progress-ring";
 import { useSession } from "next-auth/react";
 import { useDownloadGoalTemplate, useUploadGoals, BulkUploadResult } from "@/hooks/use-bulk-goals";
+import { useBulkSubmitGoals } from "@/hooks/use-goal-approval";
+import { useTeamMembers } from "@/hooks/use-team";
 import {
     Dialog,
     DialogContent,
@@ -73,25 +76,32 @@ function GoalsContent() {
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <div className="bg-muted p-1 rounded-md flex items-center">
-                        <Button
-                            variant={viewMode === 'cards' ? 'secondary' : 'ghost'}
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => setViewMode('cards')}
-                        >
-                            <LayoutGrid className="h-4 w-4" />
-                        </Button>
-                        <Button
-                            variant={viewMode === 'table' ? 'secondary' : 'ghost'}
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => setViewMode('table')}
-                        >
-                            <ListIcon className="h-4 w-4" />
-                        </Button>
-                    </div>
-                    {isManagerOrHR && <BulkUploadDialog />}
+                    {scope !== 'team' && (
+                        <div className="bg-muted p-1 rounded-md flex items-center">
+                            <Button
+                                variant={viewMode === 'cards' ? 'secondary' : 'ghost'}
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => setViewMode('cards')}
+                            >
+                                <LayoutGrid className="h-4 w-4" />
+                            </Button>
+                            <Button
+                                variant={viewMode === 'table' ? 'secondary' : 'ghost'}
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => setViewMode('table')}
+                            >
+                                <ListIcon className="h-4 w-4" />
+                            </Button>
+                        </div>
+                    )}
+                    {isManagerOrHR && (
+                        <>
+                            <SubmitTeamGoalsDialog />
+                            <BulkUploadDialog />
+                        </>
+                    )}
                     <Button asChild>
                         <Link href="/goals/new">
                             <Plus className="mr-2 h-4 w-4" /> New Goal
@@ -102,47 +112,67 @@ function GoalsContent() {
 
             {/* Summary Stats */}
             <div className="grid gap-4 md:grid-cols-4">
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Goals</CardTitle>
+                <Card className="relative overflow-hidden border-0 shadow-md hover:shadow-lg transition-shadow">
+                    <div className="absolute inset-0 bg-gradient-to-br from-violet-500/10 via-transparent to-transparent" />
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative">
+                        <CardTitle className="text-sm font-medium text-muted-foreground">Total Goals</CardTitle>
+                        <div className="h-8 w-8 rounded-lg bg-violet-100 flex items-center justify-center">
+                            <Target className="h-4 w-4 text-violet-600" />
+                        </div>
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{stats?.total || 0}</div>
+                    <CardContent className="relative">
+                        <div className="text-3xl font-bold">{stats?.total || 0}</div>
+                        <p className="text-xs text-muted-foreground mt-1">Across all categories</p>
                     </CardContent>
                 </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">In Progress</CardTitle>
+                <Card className="relative overflow-hidden border-0 shadow-md hover:shadow-lg transition-shadow">
+                    <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-transparent to-transparent" />
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative">
+                        <CardTitle className="text-sm font-medium text-muted-foreground">In Progress</CardTitle>
+                        <div className="h-8 w-8 rounded-lg bg-blue-100 flex items-center justify-center">
+                            <Clock className="h-4 w-4 text-blue-600" />
+                        </div>
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{stats?.in_progress || 0}</div>
+                    <CardContent className="relative">
+                        <div className="text-3xl font-bold">{stats?.in_progress || 0}</div>
+                        <p className="text-xs text-muted-foreground mt-1">Currently active</p>
                     </CardContent>
                 </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Completed</CardTitle>
+                <Card className="relative overflow-hidden border-0 shadow-md hover:shadow-lg transition-shadow">
+                    <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-transparent to-transparent" />
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative">
+                        <CardTitle className="text-sm font-medium text-muted-foreground">Completed</CardTitle>
+                        <div className="h-8 w-8 rounded-lg bg-emerald-100 flex items-center justify-center">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                        </div>
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{stats?.completed || 0}</div>
+                    <CardContent className="relative">
+                        <div className="text-3xl font-bold">{stats?.completed || 0}</div>
+                        <p className="text-xs text-muted-foreground mt-1">Successfully achieved</p>
                     </CardContent>
                 </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Avg Progress</CardTitle>
+                <Card className="relative overflow-hidden border-0 shadow-md hover:shadow-lg transition-shadow">
+                    <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 via-transparent to-transparent" />
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative">
+                        <CardTitle className="text-sm font-medium text-muted-foreground">Avg Progress</CardTitle>
+                        <div className="h-8 w-8 rounded-lg bg-amber-100 flex items-center justify-center">
+                            <GoalProgressRing progress={stats?.average_progress || 0} size={20} strokeWidth={3} />
+                        </div>
                     </CardHeader>
-                    <CardContent>
-                        <div className="flex items-center gap-4">
-                            <div className="text-2xl font-bold">{Math.round(stats?.average_progress || 0)}%</div>
-                            <GoalProgressRing progress={stats?.average_progress || 0} size={32} strokeWidth={4} />
+                    <CardContent className="relative">
+                        <div className="text-3xl font-bold">{Math.round(stats?.average_progress || 0)}%</div>
+                        <div className="mt-2 h-1.5 w-full rounded-full bg-amber-100 overflow-hidden">
+                            <div
+                                className="h-full rounded-full bg-gradient-to-r from-amber-400 to-amber-600 transition-all duration-500"
+                                style={{ width: `${Math.min(stats?.average_progress || 0, 100)}%` }}
+                            />
                         </div>
                     </CardContent>
                 </Card>
             </div>
 
-            <Tabs defaultValue="my-goals" className="space-y-4" onValueChange={(v) => {
-                // If switching tabs, we might want to clear params or handle routing,
-                // but for now let's just use local state or params.
-                // Actually, simple way: params drive the data.
+            <Tabs value={scope === 'team' ? 'team-goals' : 'my-goals'} className="space-y-4" onValueChange={(v) => {
+                // Tab changes are handled via Link navigation
             }}>
                 <TabsList>
                     <TabsTrigger value="my-goals" asChild>
@@ -160,8 +190,24 @@ function GoalsContent() {
                     {goalsLoading ? (
                         <GoalsPageSkeleton />
                     ) : filteredGoals?.length === 0 ? (
-                        <div className="text-center py-10">
-                            <p className="text-muted-foreground">No goals found matching your filters.</p>
+                        <div className="text-center py-16">
+                            <div className="mx-auto h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
+                                <Target className="h-8 w-8 text-muted-foreground" />
+                            </div>
+                            <h3 className="text-lg font-semibold mb-1">No goals found</h3>
+                            <p className="text-muted-foreground text-sm mb-6 max-w-sm mx-auto">
+                                {goals?.length === 0
+                                    ? "You haven't created any goals yet. Start by setting your first objective."
+                                    : "No goals match your current filters. Try adjusting your search criteria."
+                                }
+                            </p>
+                            {goals?.length === 0 && (
+                                <Button asChild>
+                                    <Link href="/goals/new">
+                                        <Plus className="mr-2 h-4 w-4" /> Create Your First Goal
+                                    </Link>
+                                </Button>
+                            )}
                         </div>
                     ) : viewMode === 'table' ? (
                         <Card>
@@ -179,26 +225,7 @@ function GoalsContent() {
                 </TabsContent>
 
                 <TabsContent value="team-goals" className="space-y-4 data-[state=inactive]:hidden data-[state=active]:block">
-                    <GoalFilters />
-                    {goalsLoading ? (
-                        <GoalsPageSkeleton />
-                    ) : filteredGoals?.length === 0 ? (
-                        <div className="text-center py-10">
-                            <p className="text-muted-foreground">No team goals found.</p>
-                        </div>
-                    ) : viewMode === 'table' ? (
-                        <Card>
-                            <CardContent className="p-0">
-                                <DataTable columns={columns} data={filteredGoals || []} />
-                            </CardContent>
-                        </Card>
-                    ) : (
-                        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                            {filteredGoals?.map((goal) => (
-                                <GoalCard key={goal.id} goal={goal} />
-                            ))}
-                        </div>
-                    )}
+                    <TeamGoalsPanel />
                 </TabsContent>
             </Tabs>
         </div>
@@ -345,6 +372,92 @@ function BulkUploadDialog() {
                             {uploadGoals.isPending ? 'Uploading...' : 'Upload & Create Goals'}
                         </Button>
                     )}
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+/* ─── Submit Team Goals Dialog ───────────────────────────────────── */
+
+function SubmitTeamGoalsDialog() {
+    const [open, setOpen] = useState(false);
+    const [selectedMember, setSelectedMember] = useState<string>("");
+
+    const { data: teamMembers, isLoading: membersLoading } = useTeamMembers({ scope: 'all' });
+    const bulkSubmit = useBulkSubmitGoals();
+
+    // Filter to only active members who have a direct manager relationship
+    const eligibleMembers = teamMembers?.filter(m => m.is_active) || [];
+
+    const handleSubmit = () => {
+        if (!selectedMember) return;
+        bulkSubmit.mutate(selectedMember, {
+            onSuccess: () => {
+                setOpen(false);
+                setSelectedMember("");
+            }
+        });
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={(isOpen) => {
+            setOpen(isOpen);
+            if (!isOpen) setSelectedMember("");
+        }}>
+            <DialogTrigger asChild>
+                <Button variant="outline" className="border-primary/20 hover:bg-primary/5">
+                    <CheckCircle2 className="mr-2 h-4 w-4" /> Submit Team Goals
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                        <CheckCircle2 className="h-5 w-5 text-primary" />
+                        Submit Team Goals
+                    </DialogTitle>
+                    <DialogDescription>
+                        Select a team member to submit all their Draft and Revision Requested goals for approval at once.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div className="py-4 space-y-4">
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium leading-none">
+                            Select Team Member
+                        </label>
+                        {membersLoading ? (
+                            <Skeleton className="h-10 w-full" />
+                        ) : (
+                            <select
+                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background disabled:cursor-not-allowed disabled:opacity-50"
+                                value={selectedMember}
+                                onChange={(e) => setSelectedMember(e.target.value)}
+                            >
+                                <option value="" disabled>Choose a team member...</option>
+                                {eligibleMembers.map((member) => (
+                                    <option key={member.id} value={member.id}>
+                                        {member.name} ({member.email})
+                                    </option>
+                                ))}
+                            </select>
+                        )}
+                        <p className="text-xs text-muted-foreground pt-1">
+                            Only goals in "Draft" or "Change Requested" state will be submitted.
+                        </p>
+                    </div>
+                </div>
+
+                <DialogFooter>
+                    <Button variant="secondary" onClick={() => setOpen(false)}>
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={handleSubmit}
+                        disabled={!selectedMember || bulkSubmit.isPending}
+                    >
+                        {bulkSubmit.isPending ? 'Submitting...' : 'Submit Goals'}
+                    </Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

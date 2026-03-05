@@ -6,10 +6,22 @@ import { toast } from "sonner";
 export interface AppraisalCycle {
     id: string;
     name: string;
-    startDate: string;
-    endDate: string;
+    description?: string;
+    // snake_case matches backend API response
+    start_date: string;
+    end_date: string;
     status: "draft" | "active" | "completed" | "archived";
-    type: "annual" | "mid_year" | "probation";
+    cycle_type: "annual" | "mid_year" | "probation";
+    eligibility_cutoff_date?: string;
+    self_assessment_deadline?: string;
+    manager_review_deadline?: string;
+    minimum_service_months?: number;
+    include_probation_employees?: boolean;
+    goals_weight?: number;
+    attributes_weight?: number;
+    requires_calibration?: boolean;
+    created_at?: string;
+    updated_at?: string;
 }
 
 export interface CreateCycleData {
@@ -88,6 +100,29 @@ export function useActivateCycle() {
                 || error.response?.data?.error
                 || error.message
                 || "Failed to activate cycle";
+            toast.error(msg);
+        },
+    });
+}
+
+export function useSyncCycleUsers() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async ({ id, criteria }: { id: string; criteria?: any }) => {
+            const { data } = await apiClient.post(`/api/cycles/${id}/sync-users`, criteria || {});
+            return data;
+        },
+        onSuccess: (data) => {
+            toast.success(data.message || "Users synced successfully");
+            queryClient.invalidateQueries({ queryKey: ["cycles"] });
+            queryClient.invalidateQueries({ queryKey: ["active-appraisal"] });
+        },
+        onError: (error: any) => {
+            const msg = error.response?.data?.message
+                || error.response?.data?.error
+                || error.message
+                || "Failed to sync users";
             toast.error(msg);
         },
     });

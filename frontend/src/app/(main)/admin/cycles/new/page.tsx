@@ -39,18 +39,18 @@ export default function CreateCyclePage() {
     const selectedType = form.watch("type");
 
     const onSubmit = (values: z.infer<typeof cycleSchema>) => {
-        // For annual cycles, auto-set eligibility cutoff to Sept 30 of the cycle's start year
+        // For annual cycles, auto-set eligibility cutoff to Sept 30 of the cycle's start year local time
         let eligibility_cutoff_date: string | undefined;
         if (values.type === "annual" && values.startDate) {
             const year = values.startDate.getFullYear();
-            eligibility_cutoff_date = new Date(year, 8, 30).toISOString(); // Sept 30
+            eligibility_cutoff_date = `${year}-09-30`; // Sept 30
         }
 
         createCycle.mutate({
             name: values.name,
             cycle_type: values.type,
-            start_date: values.startDate.toISOString(),
-            end_date: values.endDate.toISOString(),
+            start_date: format(values.startDate, "yyyy-MM-dd"),
+            end_date: format(values.endDate, "yyyy-MM-dd"),
             eligibility_cutoff_date,
         }, {
             onSuccess: () => router.push("/admin/cycles"),

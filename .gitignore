@@ -4,39 +4,14 @@
 .env.development
 .env.production
 .env*.local
-
-# Dependencies
-node_modules/
-__pycache__/
-*.pyc
-.venv/
-venv/
-
-# Next.js
-.next/
-out/
-
-# Docker
-docker-compose.override.yml
-
-# Database
-*.db
-*.sqlite3
-pgdata/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
+frontend/.env.local
+frontend/.env
 
 # Logs
 *.log
 npm-debug.log*
+*_log.txt
+*_logs.txt
 
 # Build
 dist/
@@ -53,4 +28,10 @@ employee-appraisal-system/
 backend/
 frontend/
 
+# Local AI / Agent artifacts
+.agents/
+.claude/
 
+# Deployment
+deploy/
+docker-compose.prod.yml

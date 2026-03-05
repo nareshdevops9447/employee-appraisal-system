@@ -4,6 +4,7 @@
 import { GoalForm } from "@/components/goals/goal-form";
 import { useCreateGoal } from "@/hooks/use-goals";
 import { useTeamMembers } from "@/hooks/use-team";
+import { useActiveAppraisal } from "@/hooks/use-appraisals";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
@@ -16,6 +17,10 @@ export default function CreateGoalPage() {
     // Fetch team members to populate the assignment dropdown
     const { data: teamMembers } = useTeamMembers();
 
+    // Fetch the target employee's active appraisal to get their current cycle
+    // If no employee ID is provided, it fetches the current user's active appraisal
+    const { data: activeAppraisal } = useActiveAppraisal(employeeIdParam || undefined);
+
     const handleSubmit = (data: any) => {
         // If employee_id is "myself", treat it as null/undefined (current user)
         // If employee_id is selected from dropdown, use it
@@ -26,7 +31,11 @@ export default function CreateGoalPage() {
             targetEmployeeId = employeeIdParam;
         }
 
-        const payload = { ...data, employee_id: targetEmployeeId };
+        const payload = {
+            ...data,
+            employee_id: targetEmployeeId,
+            appraisal_cycle_id: activeAppraisal?.cycle_id || undefined
+        };
         createGoal.mutate(payload, {
             onSuccess: (newGoal) => {
                 router.push(`/goals/${newGoal.id}`);

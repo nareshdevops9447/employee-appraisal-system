@@ -87,7 +87,9 @@ export default function ReportsPage() {
                         <CardTitle className="text-sm font-medium">Avg Rating</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">4.2</div>
+                        <div className="text-2xl font-bold">
+                            {completionStats?.average_rating ? completionStats.average_rating.toFixed(1) : "0.0"}
+                        </div>
                         <p className="text-xs text-muted-foreground mt-1">
                             +0.3 from last cycle
                         </p>
@@ -99,7 +101,7 @@ export default function ReportsPage() {
                         <CardTitle className="text-sm font-medium">Active Goals</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">142</div>
+                        <div className="text-2xl font-bold">{goalStats?.reduce((acc: number, curr: any) => acc + curr.value, 0) || 0}</div>
                         <p className="text-xs text-muted-foreground mt-1">
                             Organization-wide
                         </p>
