@@ -6,9 +6,18 @@ from flask import Blueprint, request, jsonify, g
 from extensions import db
 from models.peer_feedback import PeerFeedback
 from models.appraisal import Appraisal
+from models.user_profile import UserProfile
 from utils.decorators import require_auth
 
 peer_feedback_bp = Blueprint('peer_feedback', __name__)
+
+
+def _is_current_manager(employee_id, user_id):
+    """SECURITY: Verify user_id is the CURRENT manager of employee_id via UserProfile."""
+    profile = UserProfile.query.get(employee_id)
+    if not profile:
+        return False
+    return profile.manager_id == user_id
 
 
 @peer_feedback_bp.route('/request', methods=['POST'])
@@ -118,7 +127,11 @@ def list_peer_feedbacks(appraisal_id):
     ctx = g.current_user
 
     is_employee = appraisal.employee_id == ctx['user_id']
-    is_manager = appraisal.manager_id == ctx['user_id']
+    # SECURITY: Verify current manager relationship, not just historical appraisal.manager_id
+    is_manager = (
+        appraisal.manager_id == ctx['user_id']
+        or _is_current_manager(appraisal.employee_id, ctx['user_id'])
+    )
     is_hr = ctx['role'] in ('hr_admin', 'super_admin')
 
     if not (is_employee or is_manager or is_hr):
@@ -151,7 +164,11 @@ def get_peer_feedback(feedback_id):
     appraisal = Appraisal.query.get(feedback.appraisal_id)
     is_reviewer = feedback.reviewer_id == ctx['user_id']
     is_employee = appraisal and appraisal.employee_id == ctx['user_id']
-    is_manager = appraisal and appraisal.manager_id == ctx['user_id']
+    # SECURITY: Verify current manager relationship
+    is_manager = appraisal and (
+        appraisal.manager_id == ctx['user_id']
+        or _is_current_manager(appraisal.employee_id, ctx['user_id'])
+    )
     is_hr = ctx['role'] in ('hr_admin', 'super_admin')
 
     if not (is_reviewer or is_employee or is_manager or is_hr):
@@ -176,7 +193,11 @@ def cancel_peer_feedback(feedback_id):
 
     appraisal = Appraisal.query.get(feedback.appraisal_id)
     is_employee = appraisal and appraisal.employee_id == ctx['user_id']
-    is_manager = appraisal and appraisal.manager_id == ctx['user_id']
+    # SECURITY: Verify current manager relationship
+    is_manager = appraisal and (
+        appraisal.manager_id == ctx['user_id']
+        or _is_current_manager(appraisal.employee_id, ctx['user_id'])
+    )
     is_hr = ctx['role'] in ('hr_admin', 'super_admin')
 
     if not (is_employee or is_manager or is_hr):

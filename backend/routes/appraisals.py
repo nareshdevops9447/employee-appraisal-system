@@ -37,6 +37,19 @@ def _get_current_user():
     }
 
 
+def _is_current_manager(employee_id, user_id):
+    """SECURITY: Verify that user_id is the CURRENT manager of employee_id.
+
+    Checks the live UserProfile.manager_id, not the historical manager_id
+    stored in the appraisal. This prevents former managers from accessing
+    appraisals/feedback of employees they no longer manage.
+    """
+    profile = UserProfile.query.get(employee_id)
+    if not profile:
+        return False
+    return profile.manager_id == user_id
+
+
 def _fetch_user_details(user_id):
     """Fetch user details from the same DB (direct query, no HTTP)."""
     profile = UserProfile.query.get(user_id)
@@ -265,7 +278,19 @@ def list_appraisals():
     if scope == 'mine':
         query = query.filter(Appraisal.employee_id == ctx['user_id'])
     elif scope == 'team':
-        query = query.filter(Appraisal.manager_id == ctx['user_id'])
+        # SECURITY: Include appraisals where user is either the assigned manager
+        # OR the current manager (via UserProfile.manager_id) of the employee.
+        from sqlalchemy import or_
+        current_team_ids = [
+            p.user_id for p in
+            UserProfile.query.filter_by(manager_id=ctx['user_id']).all()
+        ]
+        query = query.filter(
+            or_(
+                Appraisal.manager_id == ctx['user_id'],
+                Appraisal.employee_id.in_(current_team_ids) if current_team_ids else False,
+            )
+        )
     elif scope == 'all':
         if ctx['user_role'] not in ('hr_admin', 'super_admin'):
             return jsonify({'error': 'Forbidden', 'message': 'HR access required'}), 403
@@ -336,7 +361,11 @@ def get_appraisal(id):
     appraisal = Appraisal.query.get_or_404(id)
 
     is_owner = appraisal.employee_id == ctx['user_id']
-    is_manager = appraisal.manager_id == ctx['user_id']
+    # SECURITY: Verify current manager relationship (not just historical appraisal.manager_id).
+    # Allow access if user is EITHER the assigned manager on this appraisal OR the current manager.
+    is_assigned_manager = appraisal.manager_id == ctx['user_id']
+    is_current_mgr = _is_current_manager(appraisal.employee_id, ctx['user_id'])
+    is_manager = is_assigned_manager or is_current_mgr
     is_hr = ctx['user_role'] in ('hr_admin', 'super_admin')
 
     if not (is_owner or is_manager or is_hr):

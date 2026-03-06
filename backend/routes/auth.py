@@ -369,15 +369,39 @@ def register():
     if not email or not password:
         return jsonify({'error': 'Email and password are required'}), 400
 
+    # ── Email format validation ──
+    import re
+    email_pattern = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+    if not email_pattern.match(email):
+        return jsonify({'error': 'Invalid email format'}), 400
+
+    # ── Password strength validation ──
+    password_errors = []
+    if len(password) < 8:
+        password_errors.append('at least 8 characters')
+    if not any(c.isupper() for c in password):
+        password_errors.append('at least one uppercase letter')
+    if not any(c.isdigit() for c in password):
+        password_errors.append('at least one digit')
+    if not any(c in '!@#$%^&*()_+-=[]{}|;:,.<>?/' for c in password):
+        password_errors.append('at least one special character')
+    if password_errors:
+        return jsonify({
+            'error': 'Password too weak',
+            'requirements': password_errors,
+        }), 400
+
     if UserAuth.query.filter_by(email=email).first():
         return jsonify({'error': 'Email already registered'}), 409
 
     password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
+    # SECURITY: Role is always 'employee' — never trust user input for role assignment.
+    # Role changes must be done by HR/admin through the user management endpoints.
     user = UserAuth(
         email=email,
         password_hash=password_hash,
-        role=data.get('role', 'employee'),
+        role='employee',
     )
     db.session.add(user)
     db.session.commit()

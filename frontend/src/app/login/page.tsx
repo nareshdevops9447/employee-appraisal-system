@@ -20,11 +20,36 @@ export default function LoginPage() {
     );
 }
 
+/**
+ * SECURITY: Sanitize callback URL to prevent open redirect attacks.
+ * Only allows relative paths starting with '/'. Rejects absolute URLs,
+ * protocol-relative URLs (//evil.com), and URLs with embedded protocols.
+ */
+function sanitizeCallbackUrl(url: string | null): string {
+    const DEFAULT_URL = '/dashboard';
+    if (!url) return DEFAULT_URL;
+
+    // Must be a relative path starting with /
+    // Reject: absolute URLs (https://evil.com), protocol-relative (//evil.com),
+    // embedded protocols (javascript:, data:), and backslash tricks (\evil.com)
+    if (
+        !url.startsWith('/') ||
+        url.startsWith('//') ||
+        url.startsWith('/\\') ||
+        url.includes('://') ||
+        url.includes('\\')
+    ) {
+        return DEFAULT_URL;
+    }
+
+    return url;
+}
+
 function LoginForm() {
     const { status } = useSession();
     const router = useRouter();
     const searchParams = useSearchParams();
-    const callbackUrl = searchParams.get('callbackUrl') || '/dashboard';
+    const callbackUrl = sanitizeCallbackUrl(searchParams.get('callbackUrl'));
     const error = searchParams.get('error');
     const [isLoading, setIsLoading] = useState(false);
     const [localLoading, setLocalLoading] = useState(false);
