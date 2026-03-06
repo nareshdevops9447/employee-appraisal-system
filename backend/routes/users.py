@@ -66,7 +66,8 @@ def list_users():
 
 
 # ─── GET /api/users/team ────────────────────────────────────────────
-# Must be registered BEFORE /<id> so Flask doesn't capture "team" as an id.
+# All static/literal routes (/team, /sync, /me, /me/*) MUST be registered
+# BEFORE /<id> so Flask doesn't capture them as an id parameter.
 
 @users_bp.route('/team', methods=['GET'])
 @require_auth
@@ -100,7 +101,139 @@ def get_my_team():
     return jsonify([r.to_dict() for r in reports])
 
 
+# ─── POST /api/users/sync ──────────────────────────────────────────
+
+@users_bp.route('/sync', methods=['POST'])
+def sync_user():
+    """Sync user profile from auth data. Internal endpoint.
+
+    This is called from the auth flow to create/update user profiles.
+    Kept for backward compatibility with the frontend.
+    """
+    data = request.get_json()
+    if not data or not data.get('id'):
+        return jsonify({'error': 'id is required'}), 400
+
+    user_id = data['id']
+    profile = UserProfile.query.filter_by(id=user_id).first()
+
+    if not profile:
+        profile = UserProfile(
+            id=user_id,
+            email=data.get('email', ''),
+            first_name=data.get('first_name', ''),
+            last_name=data.get('last_name', ''),
+        )
+        db.session.add(profile)
+
+    # Update profile fields
+    for field in ('email', 'first_name', 'last_name', 'job_title', 'azure_oid', 'avatar_url'):
+        if field in data and data[field]:
+            setattr(profile, field, data[field])
+
+    if data.get('department'):
+        dept_name = data['department']
+        dept = Department.query.filter_by(name=dept_name).first()
+        if not dept:
+            dept = Department(name=dept_name)
+            db.session.add(dept)
+            db.session.flush()
+        profile.department_id = dept.id
+
+    if data.get('role') == 'hr_admin':
+        profile.employment_type = 'full_time'
+
+    if data.get('manager_azure_oid'):
+        mgr = UserProfile.query.filter_by(azure_oid=data['manager_azure_oid']).first()
+        if mgr:
+            profile.manager_id = mgr.id
+
+    db.session.commit()
+    return jsonify(profile.to_dict())
+
+
+# ─── GET /api/users/me ────────────────────────────────────────────
+
+@users_bp.route('/me', methods=['GET'])
+@require_auth
+def get_my_profile():
+    """Get the current user's own profile."""
+    ctx = g.current_user
+    profile = UserProfile.query.get(ctx['user_id'])
+    if not profile:
+        return jsonify({'error': 'Profile not found'}), 404
+    return jsonify(profile.to_dict())
+
+
+# ─── POST /api/users/me/tour ────────────────────────────────────────
+
+@users_bp.route('/me/tour', methods=['POST'])
+@require_auth
+def mark_tour_complete():
+    """Mark the product tour as completed for the current user."""
+    ctx = g.current_user
+    profile = UserProfile.query.get(ctx['user_id'])
+    if not profile:
+        return jsonify({'error': 'Profile not found'}), 404
+
+    profile.has_completed_tour = True
+    db.session.commit()
+
+    return jsonify({'message': 'Tour marked as complete', 'has_completed_tour': True})
+
+
+# ─── GET /api/users/me/preferences ────────────────────────────────
+
+@users_bp.route('/me/preferences', methods=['GET'])
+@require_auth
+def get_my_preferences():
+    """Return the current user's preferences (merged with defaults)."""
+    ctx = g.current_user
+    profile = UserProfile.query.get(ctx['user_id'])
+    if not profile:
+        return jsonify({'error': 'Profile not found'}), 404
+
+    return jsonify(profile.get_preferences())
+
+
+# ─── PUT /api/users/me/preferences ────────────────────────────────
+
+ALLOWED_PREF_KEYS = set(DEFAULT_PREFERENCES.keys())
+
+
+@users_bp.route('/me/preferences', methods=['PUT'])
+@require_auth
+def update_my_preferences():
+    """Update the current user's preferences.
+
+    Accepts a JSON object with one or more preference keys.
+    Only known boolean keys are accepted; unknown keys are ignored.
+    """
+    ctx = g.current_user
+    profile = UserProfile.query.get(ctx['user_id'])
+    if not profile:
+        return jsonify({'error': 'Profile not found'}), 404
+
+    data = request.get_json()
+    if not data or not isinstance(data, dict):
+        return jsonify({'error': 'JSON object required'}), 400
+
+    # Merge: start from current stored prefs, overlay valid incoming keys
+    current = profile.preferences or {}
+    for key, value in data.items():
+        if key in ALLOWED_PREF_KEYS and isinstance(value, bool):
+            current[key] = value
+
+    profile.preferences = current
+    # IMPORTANT: flag_modified so SQLAlchemy detects in-place JSON mutation
+    flag_modified(profile, 'preferences')
+    db.session.commit()
+
+    return jsonify(profile.get_preferences())
+
+
 # ─── GET /api/users/<id> ────────────────────────────────────────────
+# Dynamic routes MUST come after all static routes above.
 
 @users_bp.route('/<id>', methods=['GET'])
 @require_auth
@@ -155,57 +288,6 @@ def update_user(id):
     return jsonify(user.to_dict())
 
 
-# ─── POST /api/users/sync ──────────────────────────────────────────
-
-@users_bp.route('/sync', methods=['POST'])
-def sync_user():
-    """Sync user profile from auth data. Internal endpoint.
-
-    This is called from the auth flow to create/update user profiles.
-    Kept for backward compatibility with the frontend.
-    """
-    data = request.get_json()
-    if not data or not data.get('id'):
-        return jsonify({'error': 'id is required'}), 400
-
-    user_id = data['id']
-    profile = UserProfile.query.filter_by(id=user_id).first()
-
-    if not profile:
-        profile = UserProfile(
-            id=user_id,
-            email=data.get('email', ''),
-            first_name=data.get('first_name', ''),
-            last_name=data.get('last_name', ''),
-        )
-        db.session.add(profile)
-
-    # Update profile fields
-    for field in ('email', 'first_name', 'last_name', 'job_title', 'azure_oid', 'avatar_url'):
-        if field in data and data[field]:
-            setattr(profile, field, data[field])
-
-    if data.get('department'):
-        dept_name = data['department']
-        dept = Department.query.filter_by(name=dept_name).first()
-        if not dept:
-            dept = Department(name=dept_name)
-            db.session.add(dept)
-            db.session.flush()
-        profile.department_id = dept.id
-
-    if data.get('role') == 'hr_admin':
-        profile.employment_type = 'full_time'
-
-    if data.get('manager_azure_oid'):
-        mgr = UserProfile.query.filter_by(azure_oid=data['manager_azure_oid']).first()
-        if mgr:
-            profile.manager_id = mgr.id
-
-    db.session.commit()
-    return jsonify(profile.to_dict())
-
-
 # ─── GET /api/users/<id>/team ────────────────────────────────────────
 
 @users_bp.route('/<id>/team', methods=['GET'])
@@ -214,81 +296,3 @@ def get_team(id):
     """Get all direct reports for a manager."""
     reports = UserProfile.query.filter_by(manager_id=id, is_active=True).all()
     return jsonify([r.to_dict() for r in reports])
-
-
-@users_bp.route('/me', methods=['GET'])
-@require_auth
-def get_my_profile():
-    """Get the current user's own profile."""
-    ctx = g.current_user
-    profile = UserProfile.query.get(ctx['user_id'])
-    if not profile:
-        return jsonify({'error': 'Profile not found'}), 404
-    return jsonify(profile.to_dict())
-
-
-# ─── POST /api/users/me/tour ────────────────────────────────────────
-
-@users_bp.route('/me/tour', methods=['POST'])
-@require_auth
-def mark_tour_complete():
-    """Mark the product tour as completed for the current user."""
-    ctx = g.current_user
-    profile = UserProfile.query.get(ctx['user_id'])
-    if not profile:
-        return jsonify({'error': 'Profile not found'}), 404
-        
-    profile.has_completed_tour = True
-    db.session.commit()
-    
-    return jsonify({'message': 'Tour marked as complete', 'has_completed_tour': True})
-
-
-# ─── GET /api/users/me/preferences ────────────────────────────────
-
-@users_bp.route('/me/preferences', methods=['GET'])
-@require_auth
-def get_my_preferences():
-    """Return the current user's preferences (merged with defaults)."""
-    ctx = g.current_user
-    profile = UserProfile.query.get(ctx['user_id'])
-    if not profile:
-        return jsonify({'error': 'Profile not found'}), 404
-
-    return jsonify(profile.get_preferences())
-
-
-# ─── PUT /api/users/me/preferences ────────────────────────────────
-
-ALLOWED_PREF_KEYS = set(DEFAULT_PREFERENCES.keys())
-
-
-@users_bp.route('/me/preferences', methods=['PUT'])
-@require_auth
-def update_my_preferences():
-    """Update the current user's preferences.
-
-    Accepts a JSON object with one or more preference keys.
-    Only known boolean keys are accepted; unknown keys are ignored.
-    """
-    ctx = g.current_user
-    profile = UserProfile.query.get(ctx['user_id'])
-    if not profile:
-        return jsonify({'error': 'Profile not found'}), 404
-
-    data = request.get_json()
-    if not data or not isinstance(data, dict):
-        return jsonify({'error': 'JSON object required'}), 400
-
-    # Merge: start from current stored prefs, overlay valid incoming keys
-    current = profile.preferences or {}
-    for key, value in data.items():
-        if key in ALLOWED_PREF_KEYS and isinstance(value, bool):
-            current[key] = value
-
-    profile.preferences = current
-    # IMPORTANT: flag_modified so SQLAlchemy detects in-place JSON mutation
-    flag_modified(profile, 'preferences')
-    db.session.commit()
-
-    return jsonify(profile.get_preferences())
