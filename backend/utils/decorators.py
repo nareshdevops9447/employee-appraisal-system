@@ -2,7 +2,7 @@
 Auth decorators — unified @require_auth and @require_role for the monolith.
 
 In the monolith, ALL routes go through JWT validation directly (no API gateway).
-The @require_auth decorator decodes the JWT and sets g.current_user.
+The @require_auth decorator decodes the JWT, verifies the user in DB, and sets g.current_user.
 The @require_role decorator checks g.current_user.role.
 
 For backward compatibility, routes that previously read X-User-Id / X-User-Role
@@ -18,14 +18,47 @@ from utils.jwt_utils import decode_access_token
 logger = logging.getLogger(__name__)
 
 
+def _verify_user_in_db(payload):
+    """Verify that the user from the JWT still exists and is active in the DB.
+
+    Returns the current user dict with DB-verified role, or None if invalid.
+    This provides defense-in-depth: even if a JWT is valid, the user must
+    still be active and their role is read from the DB (not the JWT).
+    """
+    from models.user_auth import UserAuth
+
+    user_id = payload['sub']
+    user = UserAuth.query.get(user_id)
+
+    if not user:
+        logger.warning('JWT references non-existent user: %s', user_id)
+        return None
+
+    if not user.is_active:
+        logger.warning('JWT used by deactivated user: %s', user_id)
+        return None
+
+    # SECURITY: Use the role from the database, not the JWT.
+    # This ensures role changes and deactivations take effect immediately,
+    # rather than waiting for the JWT to expire (up to 15 min).
+    return {
+        'user_id': user.id,
+        'email': user.email,
+        'role': user.role,  # From DB, not JWT — defense-in-depth
+    }
+
+
 def require_auth(f):
     """Validate JWT from Authorization header and inject current_user into g.
+
+    SECURITY: After decoding the JWT, verifies the user still exists and is
+    active in the database. Uses the DB role (not JWT role) for authorization.
 
     Sets:
         g.current_user = {
             'user_id': str,
             'email': str,
-            'role': str,
+            'role': str,  # From DB, verified
         }
     """
     @wraps(f)
@@ -43,11 +76,16 @@ def require_auth(f):
         try:
             import jwt as pyjwt
             payload = decode_access_token(token)
-            g.current_user = {
-                'user_id': payload['sub'],
-                'email': payload['email'],
-                'role': payload['role'],
-            }
+
+            # SECURITY: Verify user exists and is active in DB
+            current_user = _verify_user_in_db(payload)
+            if current_user is None:
+                return jsonify({
+                    'error': 'UNAUTHORIZED',
+                    'message': 'User account not found or deactivated',
+                }), 401
+
+            g.current_user = current_user
         except Exception as e:
             import jwt as pyjwt
             if isinstance(e, pyjwt.ExpiredSignatureError):
@@ -100,11 +138,16 @@ def require_role(*allowed_roles):
                 try:
                     import jwt as pyjwt
                     payload = decode_access_token(token)
-                    g.current_user = {
-                        'user_id': payload['sub'],
-                        'email': payload['email'],
-                        'role': payload['role'],
-                    }
+
+                    # SECURITY: Verify user exists and is active in DB
+                    current_user = _verify_user_in_db(payload)
+                    if current_user is None:
+                        return jsonify({
+                            'error': 'UNAUTHORIZED',
+                            'message': 'User account not found or deactivated',
+                        }), 401
+
+                    g.current_user = current_user
                     user = g.current_user
                 except Exception:
                     return jsonify({

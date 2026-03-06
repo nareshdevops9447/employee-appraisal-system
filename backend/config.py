@@ -7,7 +7,7 @@ import os
 
 class Config:
     """Base configuration."""
-    SECRET_KEY = os.getenv('JWT_SECRET', 'dev-secret')
+    SECRET_KEY = os.getenv('JWT_SECRET', '')
 
     # ── Database ────────────────────────────────────────────────────
     SQLALCHEMY_DATABASE_URI = os.getenv(
@@ -17,7 +17,7 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     # ── JWT ─────────────────────────────────────────────────────────
-    JWT_SECRET = os.getenv('JWT_SECRET', 'dev-secret')
+    JWT_SECRET = os.getenv('JWT_SECRET', '')
     JWT_ALGORITHM = os.getenv('JWT_ALGORITHM', 'HS256')
 
     # ── Azure AD ────────────────────────────────────────────────────

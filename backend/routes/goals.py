@@ -280,26 +280,59 @@ def update_goal(id):
     if not data:
         return jsonify({'error': 'No data provided'}), 400
 
-    for field in ('title', 'description', 'category', 'priority', 'status'):
-        if field in data:
+    # ── SECURITY: Role-based field whitelisting ──
+    # Employees can only edit basic goal info and self-assessment fields.
+    # Managers can additionally set manager review fields and status.
+    # HR/Admins can edit all fields.
+    EMPLOYEE_WRITABLE = {
+        'title', 'description', 'category', 'priority',
+        'progress_percentage', 'self_rating', 'self_comment', 'dev_status',
+    }
+    MANAGER_WRITABLE = EMPLOYEE_WRITABLE | {
+        'manager_rating', 'manager_comment', 'weight', 'status', 'goal_type',
+    }
+    HR_WRITABLE = MANAGER_WRITABLE | {'employee_id'}
+
+    if is_hr:
+        writable_fields = HR_WRITABLE
+    elif is_manager:
+        writable_fields = MANAGER_WRITABLE
+    else:
+        writable_fields = EMPLOYEE_WRITABLE
+
+    # ── Validate enum fields ──
+    VALID_STATUSES = {'not_started', 'active', 'in_progress', 'completed', 'on_hold', 'cancelled'}
+    VALID_PRIORITIES = {'low', 'medium', 'high', 'critical'}
+    VALID_GOAL_TYPES = {'performance', 'development', 'strategic'}
+
+    if 'status' in data and data['status'] not in VALID_STATUSES:
+        return jsonify({'error': f'Invalid status. Must be one of: {", ".join(sorted(VALID_STATUSES))}'}), 400
+    if 'priority' in data and data['priority'] not in VALID_PRIORITIES:
+        return jsonify({'error': f'Invalid priority. Must be one of: {", ".join(sorted(VALID_PRIORITIES))}'}), 400
+    if 'goal_type' in data and data['goal_type'] not in VALID_GOAL_TYPES:
+        return jsonify({'error': f'Invalid goal_type. Must be one of: {", ".join(sorted(VALID_GOAL_TYPES))}'}), 400
+
+    # ── Apply only whitelisted text/enum fields ──
+    text_enum_fields = {'title', 'description', 'category', 'priority', 'status',
+                        'goal_type', 'dev_status', 'self_rating', 'self_comment',
+                        'manager_rating', 'manager_comment'}
+    for field in text_enum_fields:
+        if field in data and field in writable_fields:
             setattr(goal, field, data[field])
 
-    if 'employee_id' in data:
+    # ── Specific field handling ──
+    if 'employee_id' in data and 'employee_id' in writable_fields:
         goal.employee_id = data['employee_id'] or ctx['user_id']
 
     if 'start_date' in data:
         goal.start_date = _parse_date(data['start_date'])
     if 'target_date' in data:
         goal.target_date = _parse_date(data['target_date'])
-    if 'progress_percentage' in data:
+    if 'progress_percentage' in data and 'progress_percentage' in writable_fields:
         goal.progress_percentage = data['progress_percentage']
-    
-    if 'weight' in data and goal.goal_type == 'performance':
+
+    if 'weight' in data and 'weight' in writable_fields and goal.goal_type == 'performance':
         goal.weight = data['weight']
-    
-    for field in ('goal_type', 'dev_status', 'self_rating', 'self_comment', 'manager_rating', 'manager_comment'):
-        if field in data:
-            setattr(goal, field, data[field])
 
     db.session.commit()
     return jsonify(goal.to_dict())

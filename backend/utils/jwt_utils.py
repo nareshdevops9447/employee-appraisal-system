@@ -15,7 +15,23 @@ import requests
 logger = logging.getLogger(__name__)
 
 # ── Config pulled from env / Flask app config ──────────────────────────
-JWT_SECRET = os.getenv('JWT_SECRET', 'dev-secret')
+JWT_SECRET = os.getenv('JWT_SECRET', '')
+if not JWT_SECRET:
+    logger.critical('JWT_SECRET environment variable is not set! Tokens will be insecure.')
+    # In production, this should cause a startup failure.
+    # For development, fall back to a dev-only secret with a loud warning.
+    import warnings
+    warnings.warn(
+        'JWT_SECRET is not set. Using an insecure default. '
+        'Set JWT_SECRET in your .env file before deploying.',
+        RuntimeWarning,
+        stacklevel=2,
+    )
+    JWT_SECRET = 'INSECURE-DEV-ONLY-CHANGE-ME-BEFORE-DEPLOY'
+
+if len(JWT_SECRET) < 32 and not JWT_SECRET.startswith('INSECURE-DEV'):
+    logger.warning('JWT_SECRET is shorter than 32 characters. Use a stronger secret for production.')
+
 JWT_ALGORITHM = os.getenv('JWT_ALGORITHM', 'HS256')
 ACCESS_TOKEN_EXPIRY_MINUTES = 15
 REFRESH_TOKEN_EXPIRY_DAYS = 7
