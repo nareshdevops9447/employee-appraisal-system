@@ -222,6 +222,17 @@ def create_app(config_name=None):
         except Exception:
             db.session.rollback()  # Table already exists
 
+        # ── User preferences JSONB column (Settings feature) ──────────
+        prefs_stmts = [
+            "ALTER TABLE user_profiles ADD COLUMN preferences JSONB NOT NULL DEFAULT '{}'::jsonb",
+        ]
+        for stmt in prefs_stmts:
+            try:
+                db.session.execute(db.text(stmt))
+                db.session.commit()
+            except Exception:
+                db.session.rollback()  # Column already exists
+
         # ── Department-scoped goal templates (Phase: Hannah's feature) ────
         dept_template_stmts = [
             # Add department_id column (ON DELETE SET NULL keeps templates if dept deleted)

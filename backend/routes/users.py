@@ -7,8 +7,10 @@ X-User-Id/X-User-Role headers from the gateway.
 """
 from flask import Blueprint, request, jsonify, g
 
+from sqlalchemy.orm.attributes import flag_modified
+
 from extensions import db
-from models.user_profile import UserProfile
+from models.user_profile import UserProfile, DEFAULT_PREFERENCES
 from models.department import Department
 from utils.decorators import require_auth, require_role
 
@@ -214,8 +216,6 @@ def get_team(id):
     return jsonify([r.to_dict() for r in reports])
 
 
-# ─── GET /api/users/me ──────────────────────────────────────────────
-
 @users_bp.route('/me', methods=['GET'])
 @require_auth
 def get_my_profile():
@@ -225,3 +225,70 @@ def get_my_profile():
     if not profile:
         return jsonify({'error': 'Profile not found'}), 404
     return jsonify(profile.to_dict())
+
+
+# ─── POST /api/users/me/tour ────────────────────────────────────────
+
+@users_bp.route('/me/tour', methods=['POST'])
+@require_auth
+def mark_tour_complete():
+    """Mark the product tour as completed for the current user."""
+    ctx = g.current_user
+    profile = UserProfile.query.get(ctx['user_id'])
+    if not profile:
+        return jsonify({'error': 'Profile not found'}), 404
+        
+    profile.has_completed_tour = True
+    db.session.commit()
+    
+    return jsonify({'message': 'Tour marked as complete', 'has_completed_tour': True})
+
+
+# ─── GET /api/users/me/preferences ────────────────────────────────
+
+@users_bp.route('/me/preferences', methods=['GET'])
+@require_auth
+def get_my_preferences():
+    """Return the current user's preferences (merged with defaults)."""
+    ctx = g.current_user
+    profile = UserProfile.query.get(ctx['user_id'])
+    if not profile:
+        return jsonify({'error': 'Profile not found'}), 404
+
+    return jsonify(profile.get_preferences())
+
+
+# ─── PUT /api/users/me/preferences ────────────────────────────────
+
+ALLOWED_PREF_KEYS = set(DEFAULT_PREFERENCES.keys())
+
+
+@users_bp.route('/me/preferences', methods=['PUT'])
+@require_auth
+def update_my_preferences():
+    """Update the current user's preferences.
+
+    Accepts a JSON object with one or more preference keys.
+    Only known boolean keys are accepted; unknown keys are ignored.
+    """
+    ctx = g.current_user
+    profile = UserProfile.query.get(ctx['user_id'])
+    if not profile:
+        return jsonify({'error': 'Profile not found'}), 404
+
+    data = request.get_json()
+    if not data or not isinstance(data, dict):
+        return jsonify({'error': 'JSON object required'}), 400
+
+    # Merge: start from current stored prefs, overlay valid incoming keys
+    current = profile.preferences or {}
+    for key, value in data.items():
+        if key in ALLOWED_PREF_KEYS and isinstance(value, bool):
+            current[key] = value
+
+    profile.preferences = current
+    # IMPORTANT: flag_modified so SQLAlchemy detects in-place JSON mutation
+    flag_modified(profile, 'preferences')
+    db.session.commit()
+
+    return jsonify(profile.get_preferences())
