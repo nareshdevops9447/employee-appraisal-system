@@ -15,6 +15,7 @@ import {
     FileText,
     UserCheck,
     ArrowRight,
+    Users,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -166,10 +167,10 @@ export default function DashboardPage() {
                                 return (
                                     <div key={step.key} className="flex flex-col items-center relative z-10">
                                         <div className={`h-10 w-10 rounded-full flex items-center justify-center transition-all duration-300 ${isCompleted
-                                                ? "bg-primary text-primary-foreground shadow-md"
-                                                : isCurrent
-                                                    ? "bg-primary/20 text-primary ring-2 ring-primary ring-offset-2 shadow-lg"
-                                                    : "bg-muted text-muted-foreground"
+                                            ? "bg-primary text-primary-foreground shadow-md"
+                                            : isCurrent
+                                                ? "bg-primary/20 text-primary ring-2 ring-primary ring-offset-2 shadow-lg"
+                                                : "bg-muted text-muted-foreground"
                                             }`}>
                                             <StepIcon className="h-4 w-4" />
                                         </div>
@@ -284,6 +285,32 @@ export default function DashboardPage() {
                                 <ArrowRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
                             </Link>
                         </Button>
+                        <Button asChild variant="outline" className="w-full justify-between group">
+                            <Link href="/leave">
+                                <span className="flex items-center">
+                                    <CalendarDays className="mr-2 h-4 w-4" /> Apply for Leave
+                                </span>
+                                <ArrowRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </Link>
+                        </Button>
+                        <Button asChild variant="outline" className="w-full justify-between group">
+                            <Link href="/timesheet">
+                                <span className="flex items-center">
+                                    <Clock className="mr-2 h-4 w-4" /> Log Time (Timesheet)
+                                </span>
+                                <ArrowRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </Link>
+                        </Button>
+                        {["manager", "hr_admin", "super_admin"].includes(session?.user?.role || "") && (
+                            <Button asChild variant="outline" className="w-full justify-between group text-amber-600 border-amber-200 hover:bg-amber-50">
+                                <Link href="/leave/team">
+                                    <span className="flex items-center">
+                                        <Users className="mr-2 h-4 w-4" /> Review Team Leave
+                                    </span>
+                                    <ArrowRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                </Link>
+                            </Button>
+                        ) || null}
                         {session?.user?.role === "manager" && (
                             <Button asChild variant="outline" className="w-full justify-between group">
                                 <Link href="/team">

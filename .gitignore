@@ -20,25 +20,42 @@ npm-debug.log*
 *_log.txt
 *_logs.txt
 
-# Build
-dist/
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+bin/
 build/
-*.egg-info/node_modules/
-.next/
-**/node_modules/
-**/.next/
-coverage/
-htmlcov/
-.pytest_cache/
-.mypy_cache/
-employee-appraisal-system/
-backend/
-frontend/
+develop-eggs/
+dist/
+eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+venv/
+.venv/
+backend/venv/
+backend/__pycache__/
+backend/migrations/__pycache__/
+backend/migrations/versions/__pycache__/
 
-# Local AI / Agent artifacts
+# Node / Next.js
+node_modules/
+.next/
+frontend/.next/
+out/
+frontend/out/
+
+# Others
+employee-appraisal-system/
 .agents/
 .claude/
-
-# Deployment
 deploy/
 docker-compose.prod.yml
+.DS_Store
+Thumbs.db

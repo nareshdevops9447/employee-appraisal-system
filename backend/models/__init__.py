@@ -33,3 +33,15 @@ from models.self_assessment import SelfAssessment
 from models.manager_review import ManagerReview
 from models.appraisal_review import AppraisalReview
 from models.appraisal_appeal import AppraisalAppeal
+
+# Leave models
+from models.leave_type import LeaveType
+from models.leave_balance import LeaveBalance
+from models.leave_request import LeaveRequest
+from models.leave_audit import LeaveAudit
+from models.holiday import Holiday
+
+# Timesheet models
+from models.project import Project
+from models.timesheet_entry import TimesheetEntry
+from models.weekly_timesheet import WeeklyTimesheet

@@ -4,7 +4,7 @@ Migrated from user-service/routes/departments.py.
 """
 from flask import Blueprint, request, jsonify
 
-from extensions import db
+from extensions import db, cache
 from models.department import Department
 from utils.decorators import require_auth, require_role
 
@@ -13,6 +13,7 @@ departments_bp = Blueprint('departments', __name__)
 
 @departments_bp.route('/', methods=['GET'])
 @require_auth
+@cache.cached(timeout=300, key_prefix='list_departments')
 def list_departments():
     """List all departments."""
     departments = Department.query.order_by(Department.name).all()
@@ -37,6 +38,7 @@ def create_department():
     )
     db.session.add(dept)
     db.session.commit()
+    cache.delete('list_departments')
     return jsonify(dept.to_dict()), 201
 
 
@@ -57,6 +59,7 @@ def update_department(id):
         dept.head_id = data['head_id']
 
     db.session.commit()
+    cache.delete('list_departments')
     return jsonify(dept.to_dict())
 
 
@@ -67,4 +70,5 @@ def delete_department(id):
     dept = Department.query.get_or_404(id)
     db.session.delete(dept)
     db.session.commit()
+    cache.delete('list_departments')
     return jsonify({'message': 'Department deleted'}), 200

@@ -1,6 +1,7 @@
 
 "use client";
 
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -31,6 +32,7 @@ import { cn } from "@/lib/utils";
 import { Goal } from "@/types/goal";
 import { useFieldArray } from "react-hook-form";
 import { TeamMember } from "@/hooks/use-team";
+import { UserProfile } from "@/types/user";
 
 const goalFormSchema = z.object({
     title: z.string().min(5, "Title must be at least 5 characters").max(200),
@@ -59,9 +61,10 @@ interface GoalFormProps {
     teamMembers?: TeamMember[];
     onSaveAndSubmit?: (data: GoalFormValues) => void;
     isSubmitLoading?: boolean;
+    currentUserProfile?: UserProfile;
 }
 
-export function GoalForm({ initialData, onSubmit, isLoading, employeeId, teamMembers, onSaveAndSubmit, isSubmitLoading }: GoalFormProps) {
+export function GoalForm({ initialData, onSubmit, isLoading, employeeId, teamMembers, onSaveAndSubmit, isSubmitLoading, currentUserProfile }: GoalFormProps) {
     const form = useForm<GoalFormValues>({
         resolver: zodResolver(goalFormSchema),
         defaultValues: {
@@ -86,6 +89,32 @@ export function GoalForm({ initialData, onSubmit, isLoading, employeeId, teamMem
         control: form.control,
         name: "key_results",
     });
+
+    const watchedEmployeeId = form.watch("employee_id");
+
+    useEffect(() => {
+        // Only run this auto-fill logic if creating a *new* goal
+        if (initialData) return;
+
+        let activeTargetUser: UserProfile | undefined;
+        if (watchedEmployeeId && watchedEmployeeId !== "myself") {
+            activeTargetUser = teamMembers?.find(m => m.id === watchedEmployeeId);
+        } else {
+            activeTargetUser = currentUserProfile;
+        }
+
+        if (activeTargetUser?.probation_status === 'pending') {
+            const startDateStr = activeTargetUser.joined_at || activeTargetUser.start_date;
+            const targetDateStr = activeTargetUser.probation_end_date;
+
+            if (startDateStr) {
+                form.setValue("start_date", new Date(startDateStr));
+            }
+            if (targetDateStr) {
+                form.setValue("target_date", new Date(targetDateStr));
+            }
+        }
+    }, [watchedEmployeeId, currentUserProfile, teamMembers, form, initialData]);
 
     const handleSaveAndSubmit = (data: GoalFormValues) => {
         if (!onSaveAndSubmit) return;

@@ -16,6 +16,12 @@ class Config:
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+    # ── Redis (Cache & Rate Limiting) ──────────────────────────────
+    REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+    CACHE_TYPE = 'RedisCache'
+    CACHE_REDIS_URL = REDIS_URL
+    RATELIMIT_STORAGE_URI = REDIS_URL
+
     # ── JWT ─────────────────────────────────────────────────────────
     JWT_SECRET = os.getenv('JWT_SECRET', '')
     JWT_ALGORITHM = os.getenv('JWT_ALGORITHM', 'HS256')

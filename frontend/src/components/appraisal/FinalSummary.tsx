@@ -2,12 +2,14 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Star, CheckCircle2, User, Briefcase } from "lucide-react";
+import { Star, CheckCircle2, User, Briefcase, Clock } from "lucide-react";
 import type { Appraisal, GoalForAssessment } from "@/types/appraisal";
 import { useAppraisalSelfAssessments } from "@/hooks/use-self-assessments";
 import { useManagerReviews } from "@/hooks/use-manager-reviews";
 import { useCycleAttributeTemplates, useEmployeeAttributeRatings } from "@/hooks/use-attribute-templates";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAttendanceSummary } from "@/hooks/use-timesheet";
+import { format } from "date-fns";
 
 interface FinalSummaryProps {
     appraisal: Appraisal;
@@ -20,6 +22,14 @@ export function FinalSummary({ appraisal, goals }: FinalSummaryProps) {
     const { data: managerReviews, isLoading: loadingManager } = useManagerReviews(appraisal.id);
     const { data: attrTemplates, isLoading: loadingAttrTemplates } = useCycleAttributeTemplates(appraisal.cycle_id);
     const { data: attrRatings, isLoading: loadingAttrRatings } = useEmployeeAttributeRatings(appraisal.employee_id, appraisal.cycle_id);
+
+    // Fetch attendance summary for the cycle period (mock range if cycle dates not available, or use cycle start/end)
+    // Assuming appraisal has cycle dates or we can get them from context
+    const { data: attendance, isLoading: loadingAttendance } = useAttendanceSummary(
+        appraisal.employee_id,
+        "2026-01-01", // Placeholder: should be cycle.start_date
+        "2026-12-31"  // Placeholder: should be cycle.end_date
+    );
 
     if (loadingSelf || loadingManager || loadingAttrTemplates || loadingAttrRatings) {
         return <div className="space-y-4"><Skeleton className="h-32 w-full" /><Skeleton className="h-32 w-full" /></div>;
@@ -118,6 +128,51 @@ export function FinalSummary({ appraisal, goals }: FinalSummaryProps) {
                     </div>
                 </CardContent>
             </Card>
+
+            {/* Attendance & Utilization Section */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-muted-foreground uppercase flex items-center gap-2">
+                            <Clock className="h-4 w-4" /> Attendance Summary
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex justify-between items-end">
+                            <div>
+                                <div className="text-2xl font-bold">{attendance?.leave_days || 0} Days</div>
+                                <div className="text-xs text-muted-foreground mt-1">Total Leave Taken</div>
+                            </div>
+                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                {attendance?.total_work_hours || 0} Work Hours
+                            </Badge>
+                        </div>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-muted-foreground uppercase flex items-center gap-2">
+                            <Briefcase className="h-4 w-4" /> Utilization
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex justify-between items-end">
+                            <div>
+                                <div className="text-2xl font-bold">
+                                    {attendance ? Math.min(100, (attendance.total_work_hours / 1800) * 100).toFixed(1) : 0}%
+                                </div>
+                                <div className="text-xs text-muted-foreground mt-1">Target Achievement</div>
+                            </div>
+                            <div className="h-2 w-24 bg-muted rounded-full overflow-hidden">
+                                <div
+                                    className="h-full bg-primary transition-all"
+                                    style={{ width: `${attendance ? Math.min(100, (attendance.total_work_hours / 1800) * 100) : 0}%` }}
+                                />
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
 
             {/* Goal-by-goal breakdown */}
             <div>

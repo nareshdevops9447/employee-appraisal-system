@@ -23,6 +23,9 @@ import {
     MessageSquareWarning,
     Building2,
     Bell,
+    CalendarDays,
+    Clock,
+    Briefcase,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
@@ -57,6 +60,24 @@ const mainNavItems = [
         icon: Bell,
         roles: ["employee", "manager", "hr_admin", "super_admin"],
     },
+    {
+        name: "Leave",
+        href: "/leave",
+        icon: CalendarDays,
+        roles: ["employee", "manager", "hr_admin", "super_admin"],
+    },
+    {
+        name: "Timesheet",
+        href: "/timesheet",
+        icon: Clock,
+        roles: ["employee", "manager", "hr_admin", "super_admin"],
+    },
+    {
+        name: "Team Leave",
+        href: "/leave/team",
+        icon: Users,
+        roles: ["manager", "hr_admin", "super_admin"],
+    },
 ];
 
 const adminNavItems = [
@@ -90,6 +111,12 @@ const adminNavItems = [
         icon: MessageSquareWarning,
         roles: ["hr_admin", "super_admin"],
     },
+    {
+        name: "Projects",
+        href: "/admin/projects",
+        icon: Briefcase,
+        roles: ["hr_admin", "super_admin"],
+    },
 ];
 
 const utilNavItems = [
@@ -112,6 +139,7 @@ function NavItem({ item, isActive, sidebarOpen }: {
     return (
         <Link
             href={item.href}
+            data-tour={item.name.toLowerCase().replace(/\s+/g, '-')}
             className={cn(
                 "flex items-center px-3 py-2.5 rounded-lg transition-all duration-200 font-medium text-sm group relative",
                 isActive

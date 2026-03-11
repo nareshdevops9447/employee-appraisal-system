@@ -5,6 +5,7 @@ import { GoalForm } from "@/components/goals/goal-form";
 import { useCreateGoal } from "@/hooks/use-goals";
 import { useTeamMembers } from "@/hooks/use-team";
 import { useActiveAppraisal } from "@/hooks/use-appraisals";
+import { useMe } from "@/hooks/use-user";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
@@ -16,6 +17,9 @@ export default function CreateGoalPage() {
 
     // Fetch team members to populate the assignment dropdown
     const { data: teamMembers } = useTeamMembers();
+
+    // Fetch current user profile
+    const { data: currentUserProfile } = useMe();
 
     // Fetch the target employee's active appraisal to get their current cycle
     // If no employee ID is provided, it fetches the current user's active appraisal
@@ -60,6 +64,7 @@ export default function CreateGoalPage() {
                         isLoading={createGoal.isPending}
                         employeeId={employeeIdParam}
                         teamMembers={teamMembers}
+                        currentUserProfile={currentUserProfile}
                     />
                 </CardContent>
             </Card>

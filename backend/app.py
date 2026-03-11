@@ -21,7 +21,7 @@ from flask import Flask, request, jsonify, g
 from flask_cors import CORS
 
 from config import config_map
-from extensions import db, migrate, limiter
+from extensions import db, migrate, limiter, cache
 
 # Import all models so SQLAlchemy registers them
 import models  # noqa: F401
@@ -39,6 +39,7 @@ def create_app(config_name=None):
     # ── Extensions ──────────────────────────────────────────────────
     db.init_app(app)
     migrate.init_app(app, db)
+    cache.init_app(app)
     limiter.init_app(app)
     CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 
@@ -61,6 +62,8 @@ def create_app(config_name=None):
     from routes.reports import reports_bp
     from routes.manager_reviews import manager_reviews_bp
     from routes.peer_feedback import peer_feedback_bp
+    from routes.leave import leave_bp
+    from routes.timesheet import timesheet_bp
 
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(users_bp, url_prefix='/api/users')
@@ -74,6 +77,8 @@ def create_app(config_name=None):
     app.register_blueprint(reports_bp, url_prefix='/api/reports')
     app.register_blueprint(manager_reviews_bp, url_prefix='/api/manager-reviews')
     app.register_blueprint(peer_feedback_bp, url_prefix='/api/peer-feedback')
+    app.register_blueprint(leave_bp, url_prefix='/api/leave')
+    app.register_blueprint(timesheet_bp, url_prefix='/api/timesheet')
 
     # ── Request lifecycle ───────────────────────────────────────────
 

@@ -164,3 +164,22 @@ def require_role(*allowed_roles):
             return f(*args, **kwargs)
         return decorated
     return decorator
+
+
+def cache(timeout=300, query_params=None):
+    """
+    Simplified cache decorator using flask-caching.
+    
+    :param timeout: Time in seconds to cache the response.
+    :param query_params: List of query parameters to include in the cache key. 
+                         If provided, query_string=True is used.
+    """
+    def decorator(f):
+        from extensions import cache as cache_obj
+        # Note: we use @wraps(f) inside cache_obj.cached usually,
+        # but here we can just delegate.
+        return cache_obj.cached(
+            timeout=timeout, 
+            query_string=True if query_params else False
+        )(f)
+    return decorator

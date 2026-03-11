@@ -14,6 +14,7 @@ export interface UserProfile {
     is_active: boolean;
     joined_at?: string;
     start_date?: string;
+    has_completed_tour: boolean;
     probation_end_date?: string;
     probation_status?: 'pending' | 'cleared' | 'failed';
     avatar_url?: string;

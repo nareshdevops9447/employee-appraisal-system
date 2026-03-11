@@ -27,6 +27,8 @@ class UserProfile(db.Model):
     manager_id = db.Column(db.String(36), db.ForeignKey('user_profiles.id'), nullable=True)
     azure_oid = db.Column(db.String(36), unique=True, nullable=True, index=True)
     employment_type = db.Column(db.String(20), default='full_time')
+    probation_status = db.Column(db.String(20), default='cleared')
+    probation_end_date = db.Column(db.Date, nullable=True)
     start_date = db.Column(db.Date, nullable=True)
     end_date = db.Column(db.Date, nullable=True)
     phone = db.Column(db.String(20), nullable=True)
@@ -63,6 +65,8 @@ class UserProfile(db.Model):
             'manager_id': self.manager_id,
             'azure_oid': self.azure_oid,
             'employment_type': self.employment_type,
+            'probation_status': self.probation_status,
+            'probation_end_date': self.probation_end_date.isoformat() if self.probation_end_date else None,
             'start_date': self.start_date.isoformat() if self.start_date else None,
             'end_date': self.end_date.isoformat() if self.end_date else None,
             'phone': self.phone,
