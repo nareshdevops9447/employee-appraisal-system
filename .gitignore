@@ -1,61 +1,100 @@
-# Environment variables (NEVER commit secrets)
-.env
-.env.local
-.env.development
-.env.production
-.env*.local
-**/.env
-**/.env.local
-**/.env.*.local
-frontend/.env.local
-frontend/.env
-backend/.env
-!.env.example
-!frontend/.env.example
-!backend/.env.example
-
-# Logs
-*.log
-npm-debug.log*
-*_log.txt
-*_logs.txt
-
-# Python
+# ========================
+# Python / Flask Backend
+# ========================
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-.Python
-env/
-bin/
-build/
-develop-eggs/
+*.egg-info/
+*.egg
 dist/
-eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
+build/
+.eggs/
+*.whl
+
+# Virtual environments
 venv/
 .venv/
-backend/venv/
-backend/__pycache__/
-backend/migrations/__pycache__/
-backend/migrations/versions/__pycache__/
+env/
 
-# Node / Next.js
+# ========================
+# Node / Next.js Frontend
+# ========================
 node_modules/
-.next/
+frontend/node_modules/
 frontend/.next/
-out/
 frontend/out/
+frontend/.turbo/
+.next/
 
-# Others
-employee-appraisal-system/
-.agents/
-.claude/
-deploy/
-docker-compose.prod.yml
+# ========================
+# Environment & Secrets
+# ========================
+.env
+.env.*
+!.env.example
+backend/.env
+frontend/.env
+frontend/.env.local
+frontend/.env.production
+frontend/.env.development
+
+# ========================
+# Docker
+# ========================
+docker-compose.override.yml
+
+# ========================
+# IDE / Editor
+# ========================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 .DS_Store
 Thumbs.db
+
+# ========================
+# Logs
+# ========================
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ========================
+# Database (local dev)
+# ========================
+*.sql.bak
+pgdata/
+postgres-data/
+
+# ========================
+# OS files
+# ========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ========================
+# Misc
+# ========================
+*.bak
+*.tmp
+*.temp
+coverage/
+.nyc_output/
+htmlcov/
+.coverage
+
+# Claude Code
+.agent/
+.agents/
+.claude/
+
+# Already should be there but confirm
+.next/
+.pytest_cache/
+.venv/
