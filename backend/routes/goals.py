@@ -841,7 +841,8 @@ def push_templates_to_team():
 
     template_ids = data.get('template_ids', [])
     cycle_id = data.get('cycle_id')
-    employee_id = data.get('employee_id')  # Optional: assign to one member
+    employee_id = data.get('employee_id')  # Optional: assign to one member (legacy)
+    employee_ids = data.get('employee_ids') # Optional: assign to multiple members
 
     if not template_ids:
         return jsonify({'error': 'template_ids is required and must not be empty'}), 400
@@ -857,7 +858,17 @@ def push_templates_to_team():
         return jsonify({'error': 'Forbidden: You have no direct reports.'}), 403
 
     # Determine target employees
-    if employee_id:
+    target_employees = []
+    
+    if employee_ids and isinstance(employee_ids, list):
+        if not is_hr:
+            invalid_ids = [eid for eid in employee_ids if eid not in report_ids]
+            if invalid_ids:
+                return jsonify({'error': 'One or more employees are not your direct reports.'}), 403
+        target_employees = UserProfile.query.filter(UserProfile.id.in_(employee_ids)).all()
+        if not target_employees:
+            return jsonify({'error': 'No valid employees found.'}), 404
+    elif employee_id:
         if not is_hr and employee_id not in report_ids:
             return jsonify({'error': 'This employee is not one of your direct reports.'}), 403
         target_employee = UserProfile.query.get(employee_id)

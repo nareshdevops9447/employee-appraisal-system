@@ -66,7 +66,15 @@ def upsert_self_assessment():
         assessment.employee_comment = data['employee_comment']
     
     if 'employee_rating' in data:
-        assessment.employee_rating = data['employee_rating']
+        rating = data['employee_rating']
+        if rating is not None:
+            try:
+                rating_val = float(rating)
+                if rating_val < 1.0 or rating_val > 5.0:
+                    return jsonify({'error': 'Rating must be between 1.0 and 5.0'}), 400
+                assessment.employee_rating = rating_val
+            except (ValueError, TypeError):
+                return jsonify({'error': 'Rating must be a valid number'}), 400
 
     db.session.commit()
     

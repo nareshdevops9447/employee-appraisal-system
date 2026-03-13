@@ -213,7 +213,15 @@ def rate_employee_attribute():
     # Logic: Employee can only set self_rating, Manager only manager_rating
     if is_employee:
         if 'self_rating' in data:
-            rating.self_rating = data['self_rating']
+            val = data['self_rating']
+            if val is not None:
+                try:
+                    f_val = float(val)
+                    if f_val < 1.0 or f_val > 5.0:
+                        return jsonify({'error': 'Self rating must be between 1.0 and 5.0'}), 400
+                    rating.self_rating = f_val
+                except (ValueError, TypeError):
+                    return jsonify({'error': 'Invalid self rating value'}), 400
         if 'self_comment' in data:
             rating.self_comment = data['self_comment']
     else:
@@ -222,7 +230,15 @@ def rate_employee_attribute():
         profile = UserProfile.query.get(data['employee_id'])
         if profile and profile.manager_id == ctx['user_id']:
             if 'manager_rating' in data:
-                rating.manager_rating = data['manager_rating']
+                val = data['manager_rating']
+                if val is not None:
+                    try:
+                        f_val = float(val)
+                        if f_val < 1.0 or f_val > 5.0:
+                            return jsonify({'error': 'Manager rating must be between 1.0 and 5.0'}), 400
+                        rating.manager_rating = f_val
+                    except (ValueError, TypeError):
+                        return jsonify({'error': 'Invalid manager rating value'}), 400
             if 'manager_comment' in data:
                 rating.manager_comment = data['manager_comment']
         else:

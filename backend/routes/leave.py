@@ -21,11 +21,22 @@ def get_leave_types():
 
 @leave_bp.route('/balance', methods=['GET'])
 @require_auth
-@cache(timeout=600, query_params=['year'])
-def get_my_balances():
-    """Get current user's leave balances."""
+@cache(timeout=600, query_params=['year', 'employee_id'])
+def get_balances():
+    """Get leave balances. Admins/managers can query others."""
+    from models.user_profile import UserProfile
     year = request.args.get('year', type=int, default=datetime.utcnow().year)
-    balances = LeaveService.get_user_balances(g.current_user['user_id'], year)
+    employee_id = request.args.get('employee_id')
+    
+    target_id = g.current_user['user_id']
+    if employee_id and employee_id != target_id:
+        if g.current_user['role'] not in ('hr_admin', 'super_admin'):
+            profile = UserProfile.query.get(employee_id)
+            if not profile or profile.manager_id != g.current_user['user_id']:
+                return jsonify({'error': 'Forbidden'}), 403
+        target_id = employee_id
+
+    balances = LeaveService.get_user_balances(target_id, year)
     return jsonify([b.to_dict() for b in balances])
 
 @leave_bp.route('/requests', methods=['POST'])

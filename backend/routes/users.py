@@ -98,7 +98,41 @@ def get_my_team():
 
     query = query.order_by(UserProfile.first_name)
     reports = query.all()
-    return jsonify([r.to_dict() for r in reports])
+    
+    # Enrich with process statuses
+    from models.appraisal_cycle import AppraisalCycle
+    from models.appraisal import Appraisal
+    from models.goal import Goal
+    
+    result = []
+    active_cycles = AppraisalCycle.query.filter_by(status='active').all()
+    active_cycle_ids = [c.id for c in active_cycles]
+    
+    for r in reports:
+        r_dict = r.to_dict()
+        
+        # Goals metrics
+        goals = Goal.query.filter_by(employee_id=r.id).all()
+        r_dict['goals_total'] = len(goals)
+        r_dict['goals_completed'] = sum(1 for g in goals if g.status == 'completed' or g.progress_percentage == 100)
+        
+        # Active appraisal status - find most relevant appraisal in any active cycle
+        if active_cycle_ids:
+            # Query for appraisals for this user in any of the active cycles
+            # Order by updated_at descending to get the most recent activity
+            appraisal = Appraisal.query.filter(
+                Appraisal.employee_id == r.id, 
+                Appraisal.cycle_id.in_(active_cycle_ids)
+            ).order_by(Appraisal.updated_at.desc()).first()
+            
+            if appraisal:
+                r_dict['active_appraisal_status'] = appraisal.status
+            else:
+                r_dict['active_appraisal_status'] = 'not_started' 
+            
+        result.append(r_dict)
+
+    return jsonify(result)
 
 
 # ─── POST /api/users/sync ──────────────────────────────────────────

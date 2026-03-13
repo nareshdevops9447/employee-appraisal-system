@@ -3,6 +3,7 @@ from extensions import db
 from models.project import Project
 from models.timesheet_entry import TimesheetEntry
 from models.weekly_timesheet import WeeklyTimesheet
+from models.holiday import Holiday
 from services.timesheet_service import TimesheetService
 from utils.decorators import require_auth, require_role, cache
 from extensions import db, cache as cache_obj
@@ -162,3 +163,88 @@ def get_user_summary():
     
     summary = TimesheetService.get_attendance_summary(user_id, start_date, end_date)
     return jsonify(summary)
+
+@timesheet_bp.route('/calendar', methods=['GET'])
+@require_auth
+def get_calendar_events():
+    """Get timesheet entries and leave requests formatted as calendar events."""
+    user_id = request.args.get('user_id')
+    start_str = request.args.get('start')
+    end_str = request.args.get('end')
+    
+    # If user_id is provided, verify manager access (simplified for now, full check in real app)
+    if user_id and user_id != g.current_user['user_id']:
+        if g.current_user['role'] not in ['manager', 'hr_admin', 'super_admin']:
+            return jsonify({'error': 'Unauthorized to view this user\'s calendar'}), 403
+    elif not user_id:
+        user_id = g.current_user['user_id']
+        
+    try:
+        start_date = datetime.strptime(start_str, '%Y-%m-%dT%H:%M:%S.%fZ').date() if start_str and 'T' in start_str else \
+                     datetime.strptime(start_str, '%Y-%m-%d').date() if start_str else datetime.utcnow().date().replace(day=1)
+        end_date = datetime.strptime(end_str, '%Y-%m-%dT%H:%M:%S.%fZ').date() if end_str and 'T' in end_str else \
+                   datetime.strptime(end_str, '%Y-%m-%d').date() if end_str else datetime.utcnow().date()
+    except ValueError:
+        return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD or ISO string'}), 400
+
+    entries = TimesheetEntry.query.filter(
+        TimesheetEntry.user_id == user_id,
+        TimesheetEntry.date >= start_date,
+        TimesheetEntry.date <= end_date
+    ).all()
+    
+    events = []
+    for entry in entries:
+        # For react-big-calendar, we need start/end Date objects on frontend
+        # We'll use a standard 9 AM start time for work entries to show them as blocks
+        # For an 8h entry, this results in 9am to 5pm
+        duration = float(entry.hours)
+        start_time = datetime.min.time().replace(hour=9)
+        end_time = datetime.min.time().replace(
+            hour=9 + int(duration), 
+            minute=int((duration % 1) * 60)
+        ) if duration > 0 else start_time.replace(hour=10) # 1h default min
+        
+        start_dt = datetime.combine(entry.date, start_time)
+        end_dt = datetime.combine(entry.date, end_time)
+        
+        is_all_day = entry.entry_type in ['HOLIDAY', 'LEAVE']
+        
+        event = {
+            'id': entry.id,
+            'title': entry.project.name if entry.project else 'Work',
+            'start': start_dt.isoformat(),
+            'end': (end_dt if entry.entry_type == 'WORK' else start_dt).isoformat(),
+            'allDay': is_all_day,
+            'resource': {
+                **entry.to_dict(),
+                'hours': duration,
+                'project_name': entry.project.name if entry.project else 'Work',
+                'allDay': is_all_day
+            }
+        }
+        events.append(event)
+        
+    # Add Holidays to the Calendar
+    holidays = Holiday.query.filter(
+        Holiday.date >= start_date,
+        Holiday.date <= end_date
+    ).all()
+    
+    for holiday in holidays:
+        # Check if we already have a generated timesheet entry for this holiday to avoid duplicates
+        existing_event = next((e for e in events if e['start'] == holiday.date.isoformat() and e['title'] == 'HOLIDAY'), None)
+        if not existing_event:
+            events.append({
+                'id': f"holiday-{holiday.id}",
+                'title': 'HOLIDAY',
+                'start': holiday.date.isoformat(),
+                'end': holiday.date.isoformat(),
+                'allDay': True,
+                'resource': {
+                    'description': holiday.name,
+                    'entry_type': 'HOLIDAY'
+                }
+            })
+        
+    return jsonify(events)

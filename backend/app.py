@@ -64,6 +64,7 @@ def create_app(config_name=None):
     from routes.peer_feedback import peer_feedback_bp
     from routes.leave import leave_bp
     from routes.timesheet import timesheet_bp
+    from routes.discussions import discussions_bp
 
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(users_bp, url_prefix='/api/users')
@@ -79,6 +80,7 @@ def create_app(config_name=None):
     app.register_blueprint(peer_feedback_bp, url_prefix='/api/peer-feedback')
     app.register_blueprint(leave_bp, url_prefix='/api/leave')
     app.register_blueprint(timesheet_bp, url_prefix='/api/timesheet')
+    app.register_blueprint(discussions_bp, url_prefix='/api/discussions')
 
     # ── Request lifecycle ───────────────────────────────────────────
 

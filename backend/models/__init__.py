@@ -45,3 +45,6 @@ from models.holiday import Holiday
 from models.project import Project
 from models.timesheet_entry import TimesheetEntry
 from models.weekly_timesheet import WeeklyTimesheet
+
+# Discussion models
+from models.discussion import Discussion
