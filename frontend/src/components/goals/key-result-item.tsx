@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { useState } from "react";
 import { Check, X, Pencil, Trash2 } from "lucide-react";
 import { useUpdateKeyResult, useDeleteKeyResult } from "@/hooks/use-key-results";
+import confetti from "canvas-confetti";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -38,6 +39,17 @@ export function KeyResultItem({ keyResult, isOwnerOrManager }: KeyResultItemProp
             goalId: keyResult.goal_id,
             id: keyResult.id,
             data: { current_value: currentValue }
+        }, {
+            onSuccess: () => {
+                if (currentValue >= keyResult.target_value && keyResult.current_value < keyResult.target_value) {
+                    confetti({
+                        particleCount: 100,
+                        spread: 70,
+                        origin: { y: 0.6 },
+                        colors: ['#26ccff', '#a25afd', '#ff5e7e', '#88ff5a', '#fcff42', '#ffa62d', '#ff36ff']
+                    });
+                }
+            }
         });
         setIsEditing(false);
     };

@@ -62,7 +62,7 @@ function GoalApprovalCard({
                     <div>
                         <CardTitle className="text-base">{goal.title}</CardTitle>
                         {goal.description && (
-                            <CardDescription className="mt-1">{goal.description}</CardDescription>
+                            <CardDescription className="mt-1 prose prose-sm dark:prose-invert max-w-none [&>p]:m-0" dangerouslySetInnerHTML={{ __html: goal.description }} />
                         )}
                     </div>
                     <div className="flex gap-2">

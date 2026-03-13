@@ -220,7 +220,7 @@ export default function GoalDetailPage() {
                                 <span className="font-bold text-lg">{Math.round(goal.progress_percentage)}%</span>
                             </div>
                             {goal.description && (
-                                <p className="text-muted-foreground">{goal.description}</p>
+                                <div className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground [&>p]:m-0" dangerouslySetInnerHTML={{ __html: goal.description }} />
                             )}
                         </CardContent>
                     </Card>

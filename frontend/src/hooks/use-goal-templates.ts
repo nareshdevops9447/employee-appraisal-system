@@ -142,6 +142,7 @@ export interface PushTemplatesToTeamData {
     template_ids: string[];
     cycle_id: string;
     employee_id?: string;
+    employee_ids?: string[];
 }
 
 export function usePushTemplatesToTeam() {

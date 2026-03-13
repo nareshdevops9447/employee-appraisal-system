@@ -6,8 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Star, Send, Eye, Loader2, CheckCircle2, Save } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Star, Send, Eye, Loader2, CheckCircle2, Save, HelpCircle } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import {
     useManagerReviews,
     useUpsertManagerGoalReview,
@@ -17,6 +19,31 @@ import {
 import { useAppraisalSelfAssessments } from "@/hooks/use-self-assessments";
 import { useCycleAttributeTemplates, useEmployeeAttributeRatings, useRateEmployeeAttribute } from "@/hooks/use-attribute-templates";
 import type { Appraisal, GoalForAssessment } from "@/types/appraisal";
+
+const RatingGuide = () => (
+    <div className="space-y-2 p-1">
+        <h4 className="font-medium text-sm border-b pb-1 mb-2">Rating Scale Guide</h4>
+        <div className="grid grid-cols-[30px_1fr] gap-x-2 gap-y-1 text-xs">
+            <span className="font-bold text-red-600">1.0</span>
+            <span className="text-muted-foreground">Needs Improvement / Unsatisfactory</span>
+            
+            <span className="font-bold text-amber-600">2.0</span>
+            <span className="text-muted-foreground">Developing / Below Expectations</span>
+            
+            <span className="font-bold text-blue-600">3.0</span>
+            <span className="text-muted-foreground">Meets Expectations / Satisfactory</span>
+            
+            <span className="font-bold text-green-600">4.0</span>
+            <span className="text-muted-foreground">Exceeds Expectations / Above Average</span>
+            
+            <span className="font-bold text-emerald-600">5.0</span>
+            <span className="text-muted-foreground">Outstanding / Exceptional</span>
+        </div>
+        <p className="text-[10px] italic text-muted-foreground mt-2 pt-1 border-t">
+            * Precision decimals (e.g. 3.75) are supported.
+        </p>
+    </div>
+);
 
 interface ManagerReviewFormProps {
     appraisal: Appraisal;
@@ -48,7 +75,7 @@ export function ManagerReviewForm({ appraisal, goals, readOnly = false }: Manage
     const [strengths, setStrengths] = useState("");
     const [developmentAreas, setDevelopmentAreas] = useState("");
 
-    const [activeTab, setActiveTab] = useState("goals");
+    const [step, setStep] = useState(1);
     const [lastSaved, setLastSaved] = useState<string | null>(null);
     const [showConfirm, setShowConfirm] = useState(false);
 
@@ -122,11 +149,27 @@ export function ManagerReviewForm({ appraisal, goals, readOnly = false }: Manage
 
     // Update helpers
     const updateGoalRating = useCallback((goalId: string, field: "rating" | "comment", value: number | string) => {
-        setGoalRatings(prev => ({ ...prev, [goalId]: { ...prev[goalId], [field]: value } }));
+        let finalValue = value;
+        if (field === "rating") {
+            const num = typeof value === "string" ? parseFloat(value) : value;
+            if (num > 5) {
+                finalValue = 5;
+                toast.error("Rating cannot exceed 5.0");
+            }
+        }
+        setGoalRatings(prev => ({ ...prev, [goalId]: { ...prev[goalId], [field]: finalValue } }));
     }, []);
 
     const updateAttrRating = useCallback((templateId: string, field: "rating" | "comment", value: number | string) => {
-        setAttrRatingsState(prev => ({ ...prev, [templateId]: { ...prev[templateId], [field]: value } }));
+        let finalValue = value;
+        if (field === "rating") {
+            const num = typeof value === "string" ? parseFloat(value) : value;
+            if (num > 5) {
+                finalValue = 5;
+                toast.error("Rating cannot exceed 5.0");
+            }
+        }
+        setAttrRatingsState(prev => ({ ...prev, [templateId]: { ...prev[templateId], [field]: finalValue } }));
     }, []);
 
     // Save Handlers
@@ -175,8 +218,8 @@ export function ManagerReviewForm({ appraisal, goals, readOnly = false }: Manage
         return <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>;
     }
 
-    const performanceGoals = goals.filter(g => g.goal_type === 'performance');
-    const allGoalsRated = performanceGoals.every(g => (goalRatings[g.id]?.rating ?? 0) > 0 && (goalRatings[g.id]?.comment ?? "").trim().length > 0);
+    const performanceGoals = goals.filter((g: any) => g.goal_type === 'performance');
+    const allGoalsRated = performanceGoals.every((g: any) => (goalRatings[g.id]?.rating ?? 0) > 0 && (goalRatings[g.id]?.comment ?? "").trim().length > 0);
     const allAttrsRated = (attrTemplates || []).every(t => (attrRatingsState[t.id]?.rating ?? 0) > 0 && (attrRatingsState[t.id]?.comment ?? "").trim().length > 0);
     const isOverallReady = overallRating > 0 && overallFeedback.trim().length > 0;
 
@@ -210,24 +253,35 @@ export function ManagerReviewForm({ appraisal, goals, readOnly = false }: Manage
                 )}
             </div>
 
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-                <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="goals">
-                        Performance Goals
-                        {allGoalsRated && <CheckCircle2 className="w-4 h-4 ml-2 text-green-500" />}
-                    </TabsTrigger>
-                    <TabsTrigger value="attributes">
-                        Behavioral Attributes
-                        {allAttrsRated && <CheckCircle2 className="w-4 h-4 ml-2 text-green-500" />}
-                    </TabsTrigger>
-                    <TabsTrigger value="overall">
-                        Overall Review
-                        {isOverallReady && <CheckCircle2 className="w-4 h-4 ml-2 text-green-500" />}
-                    </TabsTrigger>
-                </TabsList>
+            {/* Stepper Header */}
+            <div className="flex justify-between items-center mb-8 px-2 relative">
+                <div className="absolute left-0 right-0 top-4 h-0.5 bg-muted -z-10" />
+                {[1, 2, 3].map((s) => (
+                    <div key={s} className="flex flex-col items-center gap-2 bg-card px-2">
+                        <div className={cn(
+                            "h-8 w-8 rounded-full flex items-center justify-center font-bold text-sm transition-colors",
+                            step === s ? "bg-primary text-primary-foreground shadow-md ring-2 ring-primary ring-offset-2 ring-offset-background" : 
+                            step > s ? "bg-primary text-primary-foreground opacity-70" : "bg-muted text-muted-foreground"
+                        )}>
+                            {s}
+                        </div>
+                        <span className={cn(
+                            "text-xs font-medium flex items-center gap-1",
+                            step === s ? "text-primary" : "text-muted-foreground"
+                        )}>
+                            {s === 1 ? 'Performance Goals' : s === 2 ? 'Behavioral Attributes' : 'Overall Review'}
+                            {s === 1 && allGoalsRated && <CheckCircle2 className="w-3 h-3 text-green-500" />}
+                            {s === 2 && allAttrsRated && <CheckCircle2 className="w-3 h-3 text-green-500" />}
+                            {s === 3 && isOverallReady && <CheckCircle2 className="w-3 h-3 text-green-500" />}
+                        </span>
+                    </div>
+                ))}
+            </div>
 
-                {/* --- GOALS TAB --- */}
-                <TabsContent value="goals" className="space-y-4">
+            <div className="min-h-[300px]">
+                {/* STEP 1: GOALS TAB */}
+                {step === 1 && (
+                    <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
                     {performanceGoals.map((goal) => {
                         const selfAssessment = selfAssessments?.find(sa => sa.goal_id === goal.id);
                         const mgrData = goalRatings[goal.id] || { rating: 0, comment: "" };
@@ -271,21 +325,40 @@ export function ManagerReviewForm({ appraisal, goals, readOnly = false }: Manage
 
                                     {/* Manager Rating Input */}
                                     <div className="pt-2">
-                                        <label className="text-sm font-medium">Your Rating (1-5) <span className="text-red-500">*</span></label>
-                                        <div className="flex items-center gap-3 mt-2">
-                                            <Input
-                                                type="number"
-                                                min="1"
-                                                max="5"
-                                                step="0.01"
-                                                value={mgrData.rating > 0 ? mgrData.rating : ""}
-                                                onChange={(e) => !readOnly && updateGoalRating(goal.id, "rating", parseFloat(e.target.value) || 0)}
-                                                readOnly={readOnly}
-                                                disabled={readOnly}
-                                                placeholder="e.g. 3.85"
-                                                className="w-32"
-                                            />
-                                            <span className="text-sm text-muted-foreground">/ 5</span>
+                                        <div className="flex items-center gap-2">
+                                            <label className="text-sm font-medium">Your Rating (1-5) <span className="text-red-500">*</span></label>
+                                            <Popover>
+                                                <PopoverTrigger asChild>
+                                                    <Button variant="ghost" size="icon" className="h-4 w-4 rounded-full p-0">
+                                                        <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent side="right" className="w-64">
+                                                    <RatingGuide />
+                                                </PopoverContent>
+                                            </Popover>
+                                        </div>
+                                        <div className="flex flex-col gap-1 mt-2">
+                                            <div className="flex items-center gap-3">
+                                                <Input
+                                                    type="number"
+                                                    min="1"
+                                                    max="5"
+                                                    step="0.01"
+                                                    value={mgrData.rating > 0 ? mgrData.rating : ""}
+                                                    onChange={(e) => !readOnly && updateGoalRating(goal.id, "rating", parseFloat(e.target.value) || 0)}
+                                                    readOnly={readOnly}
+                                                    disabled={readOnly}
+                                                    placeholder="e.g. 3.85"
+                                                    className="w-32"
+                                                />
+                                                <span className="text-sm text-muted-foreground">out of 5</span>
+                                            </div>
+                                            {!readOnly && (
+                                                <span className="text-xs text-muted-foreground mt-1">
+                                                    Rate from 1 (Low) to 5 (High). Decimals allowed (e.g., 4.5).
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
 
@@ -307,10 +380,12 @@ export function ManagerReviewForm({ appraisal, goals, readOnly = false }: Manage
                             </Card>
                         );
                     })}
-                </TabsContent>
+                    </div>
+                )}
 
-                {/* --- ATTRIBUTES TAB --- */}
-                <TabsContent value="attributes" className="space-y-4">
+                {/* STEP 2: ATTRIBUTES TAB */}
+                {step === 2 && (
+                    <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
                     {attrTemplates?.map((template) => {
                         const employeeRatingObj = attrRatings?.find(r => r.attribute_template_id === template.id);
                         const mgrData = attrRatingsState[template.id] || { rating: 0, comment: "" };
@@ -351,21 +426,40 @@ export function ManagerReviewForm({ appraisal, goals, readOnly = false }: Manage
 
                                     {/* Manager Rating Input */}
                                     <div className="pt-2">
-                                        <label className="text-sm font-medium">Your Rating (1-5) <span className="text-red-500">*</span></label>
-                                        <div className="flex items-center gap-3 mt-2">
-                                            <Input
-                                                type="number"
-                                                min="1"
-                                                max="5"
-                                                step="0.01"
-                                                value={mgrData.rating > 0 ? mgrData.rating : ""}
-                                                onChange={(e) => !readOnly && updateAttrRating(template.id, "rating", parseFloat(e.target.value) || 0)}
-                                                readOnly={readOnly}
-                                                disabled={readOnly}
-                                                placeholder="e.g. 4.2"
-                                                className="w-32"
-                                            />
-                                            <span className="text-sm text-muted-foreground">/ 5</span>
+                                        <div className="flex items-center gap-2">
+                                            <label className="text-sm font-medium">Your Rating (1-5) <span className="text-red-500">*</span></label>
+                                            <Popover>
+                                                <PopoverTrigger asChild>
+                                                    <Button variant="ghost" size="icon" className="h-4 w-4 rounded-full p-0">
+                                                        <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent side="right" className="w-64">
+                                                    <RatingGuide />
+                                                </PopoverContent>
+                                            </Popover>
+                                        </div>
+                                        <div className="flex flex-col gap-1 mt-2">
+                                            <div className="flex items-center gap-3">
+                                                <Input
+                                                    type="number"
+                                                    min="1"
+                                                    max="5"
+                                                    step="0.01"
+                                                    value={mgrData.rating > 0 ? mgrData.rating : ""}
+                                                    onChange={(e) => !readOnly && updateAttrRating(template.id, "rating", parseFloat(e.target.value) || 0)}
+                                                    readOnly={readOnly}
+                                                    disabled={readOnly}
+                                                    placeholder="e.g. 4.2"
+                                                    className="w-32"
+                                                />
+                                                <span className="text-sm text-muted-foreground">out of 5</span>
+                                            </div>
+                                            {!readOnly && (
+                                                <span className="text-xs text-muted-foreground mt-1">
+                                                    Rate from 1 (Low) to 5 (High). Decimals allowed (e.g., 4.5).
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
 
@@ -387,32 +481,53 @@ export function ManagerReviewForm({ appraisal, goals, readOnly = false }: Manage
                             </Card>
                         );
                     })}
-                </TabsContent>
+                    </div>
+                )}
 
-                {/* --- OVERALL TAB --- */}
-                <TabsContent value="overall" className="space-y-4">
-                    <Card>
+                {/* STEP 3: OVERALL TAB */}
+                {step === 3 && (
+                    <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+                        <Card>
                         <CardHeader>
                             <CardTitle className="text-base">Overall Manager Review</CardTitle>
                             <CardDescription>Summarize the employee's performance for this cycle.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
                             <div>
-                                <label className="text-sm font-medium">{readOnly ? "Overall Rating" : "Overall Rating (Auto-calculated average)"} {!readOnly && <span className="text-red-500">*</span>}</label>
-                                <div className="flex items-center gap-3 mt-2">
-                                    <Input
-                                        type="number"
-                                        min="1"
-                                        max="5"
-                                        step="0.01"
-                                        value={overallRating > 0 ? overallRating : ""}
-                                        onChange={(e) => !readOnly && setOverallRating(parseFloat(e.target.value) || 0)}
-                                        readOnly={readOnly}
-                                        disabled={readOnly}
-                                        placeholder="e.g. 3.5"
-                                        className="w-32 text-lg font-semibold"
-                                    />
-                                    <span className="text-sm text-muted-foreground">/ 5</span>
+                                <div className="flex items-center gap-2">
+                                    <label className="text-sm font-medium">{readOnly ? "Overall Rating" : "Overall Rating (Auto-calculated average)"} {!readOnly && <span className="text-red-500">*</span>}</label>
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button variant="ghost" size="icon" className="h-4 w-4 rounded-full p-0">
+                                                <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent side="right" className="w-64">
+                                            <RatingGuide />
+                                        </PopoverContent>
+                                    </Popover>
+                                </div>
+                                <div className="flex flex-col gap-1 mt-2">
+                                    <div className="flex items-center gap-3">
+                                        <Input
+                                            type="number"
+                                            min="1"
+                                            max="5"
+                                            step="0.01"
+                                            value={overallRating > 0 ? overallRating : ""}
+                                            onChange={(e) => !readOnly && setOverallRating(parseFloat(e.target.value) || 0)}
+                                            readOnly={readOnly}
+                                            disabled={readOnly}
+                                            placeholder="e.g. 3.5"
+                                            className="w-32 text-lg font-semibold"
+                                        />
+                                        <span className="text-sm text-muted-foreground">out of 5</span>
+                                    </div>
+                                    {!readOnly && (
+                                        <span className="text-xs text-muted-foreground mt-1">
+                                            Rate from 1 (Low) to 5 (High). Decimals allowed (e.g., 4.5).
+                                        </span>
+                                    )}
                                 </div>
                             </div>
 
@@ -461,10 +576,23 @@ export function ManagerReviewForm({ appraisal, goals, readOnly = false }: Manage
                         </CardContent>
                     </Card>
 
-                    {/* Submit Area */}
-                    {!readOnly && (
-                        <>
-                            <div className="flex items-center justify-end gap-3 pt-4">
+                    {/* Submit Area Context */}
+                    <div className="flex items-center justify-between border-t border-border pt-4 mt-6">
+                        <div className="flex items-center gap-2">
+                            {step > 1 && (
+                                <Button variant="outline" onClick={() => setStep(s => s - 1)}>
+                                    Previous
+                                </Button>
+                            )}
+                            {step < 3 && (
+                                <Button onClick={() => setStep(s => s + 1)}>
+                                    Next Step
+                                </Button>
+                            )}
+                        </div>
+                        
+                        {!readOnly && step === 3 && (
+                            <div className="flex items-center justify-end gap-3">
                                 {!showConfirm ? (
                                     <Button disabled={!isReadyToSubmit} onClick={() => setShowConfirm(true)} size="lg">
                                         <Send className="mr-2 h-4 w-4" />
@@ -488,15 +616,16 @@ export function ManagerReviewForm({ appraisal, goals, readOnly = false }: Manage
                                     </div>
                                 )}
                             </div>
-                            {!isReadyToSubmit && (
-                                <p className="text-sm text-amber-600 text-right">
-                                    You must rate and comment on all Goals and Attributes, and provide an Overall Rating/Feedback.
-                                </p>
-                            )}
-                        </>
+                        )}
+                    </div>
+                    {!readOnly && step === 3 && !isReadyToSubmit && (
+                        <p className="text-sm text-amber-600 text-right mt-2">
+                            You must rate and comment on all Goals and Attributes, and provide an Overall Rating/Feedback.
+                        </p>
                     )}
-                </TabsContent>
-            </Tabs>
+                    </div>
+                )}
+            </div>
         </div>
     );
 }

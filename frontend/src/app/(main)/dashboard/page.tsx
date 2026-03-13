@@ -22,6 +22,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { GoalStatusChart } from "@/components/dashboard/goal-status-chart";
+import { TeamStatusOverview } from "@/components/dashboard/team-status-overview";
 
 /* ─── Appraisal lifecycle steps ───────────────────────────────── */
 const LIFECYCLE_STEPS = [
@@ -74,9 +76,112 @@ export default function DashboardPage() {
 
     const currentStepIndex = getStepIndex(appraisalStatus);
 
+    // Calculate action items dynamically
+    const actionItems = [];
+
+    if (hasCycle) {
+        if (appraisalStatus === "goals_approved") {
+            actionItems.push({
+                title: "Start Self-Assessment",
+                description: `Your goals are approved. Ready for self evaluation.`,
+                href: `/appraisals/${activeAppraisal.id}`,
+                urgency: "high",
+                icon: FileText,
+                color: "text-red-600",
+                bg: "bg-red-100",
+            });
+        } else if (appraisalStatus === "self_assessment_in_progress") {
+            actionItems.push({
+                title: "Complete Self-Assessment",
+                description: cycleEndDate ? `Due before ${cycleEndDate}` : "Finish your evaluation.",
+                href: `/appraisals/${activeAppraisal.id}`,
+                urgency: "high",
+                icon: FileText,
+                color: "text-red-600",
+                bg: "bg-red-100",
+            });
+        } else if (appraisalStatus === "not_started" || appraisalStatus === "goals_pending_approval") {
+            actionItems.push({
+                title: "Finalize Appraisal Goals",
+                description: `Set your goals for the ${cycleName} cycle`,
+                href: `/goals`,
+                urgency: "medium",
+                icon: Target,
+                color: "text-amber-600",
+                bg: "bg-amber-100",
+            });
+        } else if (appraisalStatus === "acknowledgement_pending") {
+             actionItems.push({
+                title: "Sign Off on Review",
+                description: `Your manager has completed your review.`,
+                href: `/appraisals/${activeAppraisal.id}`,
+                urgency: "high",
+                icon: ClipboardList,
+                color: "text-red-600",
+                bg: "bg-red-100",
+            });
+        }
+        
+        if (session?.user?.role === "manager" && appraisalStatus === "manager_review") {
+            actionItems.push({
+                title: "Manager Review Required",
+                description: "Review your team's self-assessments.",
+                href: `/team`,
+                urgency: "high",
+                icon: UserCheck,
+                color: "text-red-600",
+                bg: "bg-red-100",
+            });
+        }
+    }
+
+    if (goalStats && goalStats.in_progress > 0) {
+        actionItems.push({
+            title: "Update Goal Progress",
+            description: `You have ${goalStats.in_progress} goals in progress.`,
+            href: `/goals`,
+            urgency: "low",
+            icon: Target,
+            color: "text-emerald-600",
+            bg: "bg-emerald-100",
+        });
+    } else if (goalStats && goalStats.total === 0) {
+         actionItems.push({
+            title: "Set Your Goals",
+            description: "You haven't set any goals yet.",
+            href: `/goals/new`,
+            urgency: "medium",
+            icon: Target,
+            color: "text-amber-600",
+            bg: "bg-amber-100",
+        });
+    }
+
+    actionItems.push({
+        title: "Submit Weekly Timesheet",
+        description: "Log your hours for the current week.",
+        href: `/timesheet`,
+        urgency: "medium",
+        icon: Clock,
+        color: "text-amber-600",
+        bg: "bg-amber-100",
+    });
+
+    if (["manager", "hr_admin", "super_admin"].includes(session?.user?.role || "")) {
+        actionItems.push({
+            title: "Review Team Leave",
+            description: "Check pending time-off requests.",
+            href: `/leave/team`,
+            urgency: "low",
+            icon: Users,
+            color: "text-emerald-600",
+            bg: "bg-emerald-100",
+        });
+    }
+
     return (
         <div className="space-y-6">
-            {/* Header */}
+            {/* Header ... (Keep existing Header, Stat Cards, Stepper, Recent Activity) */}
             <div className="flex flex-col gap-2">
                 <div className="flex items-start justify-between">
                     <div>
@@ -187,17 +292,26 @@ export default function DashboardPage() {
             )}
 
             {/* Content Grid */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-                <Card className="col-span-4 border-0 shadow-md">
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {/* Team Status Overview (Manager only) */}
+                {["manager", "hr_admin", "super_admin"].includes((session?.user as any)?.role || "") && (
+                    <TeamStatusOverview />
+                )}
+
+                {/* Recent Activity */}
+                <Card className="col-span-1 border-0 shadow-md">
                     <CardHeader>
                         <CardTitle>Recent Activity</CardTitle>
                     </CardHeader>
                     <CardContent>
                         {hasCycle ? (
                             <div className="space-y-3">
-                                <div className="flex items-center justify-between rounded-lg border p-4 hover:bg-muted/30 transition-colors">
+                                <Link 
+                                    href="/appraisals"
+                                    className="flex items-center justify-between rounded-lg border p-4 hover:bg-muted/50 transition-all group"
+                                >
                                     <div className="flex items-center gap-3">
-                                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center group-hover:scale-110 transition-transform">
                                             <ClipboardList className="h-4 w-4 text-primary" />
                                         </div>
                                         <div>
@@ -210,11 +324,14 @@ export default function DashboardPage() {
                                     <Badge variant={appraisalStatus === "not_started" ? "secondary" : "default"}>
                                         {formatCycleType(cycleType)}
                                     </Badge>
-                                </div>
+                                </Link>
                                 {goalStats && goalStats.total > 0 && (
-                                    <div className="flex items-center justify-between rounded-lg border p-4 hover:bg-muted/30 transition-colors">
+                                    <Link 
+                                        href="/goals"
+                                        className="flex items-center justify-between rounded-lg border p-4 hover:bg-muted/50 transition-all group"
+                                    >
                                         <div className="flex items-center gap-3">
-                                            <div className="h-8 w-8 rounded-full bg-violet-100 flex items-center justify-center">
+                                            <div className="h-8 w-8 rounded-full bg-violet-100 flex items-center justify-center group-hover:scale-110 transition-transform">
                                                 <Target className="h-4 w-4 text-violet-600" />
                                             </div>
                                             <div>
@@ -227,7 +344,7 @@ export default function DashboardPage() {
                                         <span className="text-sm font-semibold text-primary">
                                             {Math.round(goalStats.average_progress || 0)}%
                                         </span>
-                                    </div>
+                                    </Link>
                                 )}
                             </div>
                         ) : (
@@ -242,89 +359,51 @@ export default function DashboardPage() {
                     </CardContent>
                 </Card>
 
-                <Card className="col-span-3 border-0 shadow-md">
-                    <CardHeader>
-                        <CardTitle>Quick Actions</CardTitle>
+                {/* Goal Overview Chart */}
+                <Card className="col-span-1 border-0 shadow-md flex flex-col">
+                    <CardHeader className="pb-2">
+                        <CardTitle>My Goal Progress</CardTitle>
                     </CardHeader>
-                    <CardContent className="flex flex-col gap-2">
-                        {hasCycle && appraisalStatus === "goals_approved" && (
-                            <Button asChild className="w-full justify-between group">
-                                <Link href={`/appraisals/${activeAppraisal.id}`}>
-                                    <span className="flex items-center">
-                                        <ClipboardList className="mr-2 h-4 w-4" /> Start Self-Assessment
-                                    </span>
-                                    <ArrowRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                </Link>
-                            </Button>
-                        )}
-                        {hasCycle && appraisalStatus === "self_assessment_in_progress" && (
-                            <Button asChild className="w-full justify-between group" variant="default">
-                                <Link href={`/appraisals/${activeAppraisal.id}`}>
-                                    <span className="flex items-center">
-                                        <ClipboardList className="mr-2 h-4 w-4" /> Continue Assessment
-                                    </span>
-                                    <ArrowRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                </Link>
-                            </Button>
-                        )}
-                        {hasCycle && appraisalStatus === "acknowledgement_pending" && (
-                            <Button asChild className="w-full justify-between group" variant="default">
-                                <Link href={`/appraisals/${activeAppraisal.id}`}>
-                                    <span className="flex items-center">
-                                        <ClipboardList className="mr-2 h-4 w-4" /> Sign Off on Review
-                                    </span>
-                                    <ArrowRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                </Link>
-                            </Button>
-                        )}
-                        <Button asChild variant="outline" className="w-full justify-between group">
-                            <Link href="/goals/new">
-                                <span className="flex items-center">
-                                    <Target className="mr-2 h-4 w-4" /> Create New Goal
-                                </span>
-                                <ArrowRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </Link>
-                        </Button>
-                        <Button asChild variant="outline" className="w-full justify-between group">
-                            <Link href="/leave">
-                                <span className="flex items-center">
-                                    <CalendarDays className="mr-2 h-4 w-4" /> Apply for Leave
-                                </span>
-                                <ArrowRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </Link>
-                        </Button>
-                        <Button asChild variant="outline" className="w-full justify-between group">
-                            <Link href="/timesheet">
-                                <span className="flex items-center">
-                                    <Clock className="mr-2 h-4 w-4" /> Log Time (Timesheet)
-                                </span>
-                                <ArrowRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </Link>
-                        </Button>
-                        {["manager", "hr_admin", "super_admin"].includes(session?.user?.role || "") && (
-                            <Button asChild variant="outline" className="w-full justify-between group text-amber-600 border-amber-200 hover:bg-amber-50">
-                                <Link href="/leave/team">
-                                    <span className="flex items-center">
-                                        <Users className="mr-2 h-4 w-4" /> Review Team Leave
-                                    </span>
-                                    <ArrowRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                </Link>
-                            </Button>
-                        ) || null}
-                        {session?.user?.role === "manager" && (
-                            <Button asChild variant="outline" className="w-full justify-between group">
-                                <Link href="/team">
-                                    <span className="flex items-center">
-                                        <Target className="mr-2 h-4 w-4" /> Manage Team Goals
-                                    </span>
-                                    <ArrowRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                </Link>
-                            </Button>
-                        )}
-                        {!hasCycle && (
-                            <div className="text-center py-4 text-sm text-muted-foreground">
-                                <p>No active appraisal cycle.</p>
-                                <p className="text-xs mt-1">Contact your HR admin to get started.</p>
+                    <CardContent className="flex-1 pb-4">
+                        <GoalStatusChart stats={goalStats} />
+                    </CardContent>
+                </Card>
+
+                {/* Action Center */}
+                <Card className="col-span-1 border-0 shadow-md flex flex-col">
+                    <CardHeader className="pb-3 border-b border-border/50 mb-4">
+                        <CardTitle className="flex items-center">
+                            Action Center 
+                            {actionItems.filter(i => i.urgency === 'high').length > 0 && (
+                                <span className="ml-2 flex h-2 w-2 rounded-full bg-red-600" />
+                            )}
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="flex flex-col gap-3 flex-1 overflow-y-auto max-h-[350px] pr-2">
+                        {actionItems.length > 0 ? (
+                            actionItems.map((item, idx) => {
+                                const Icon = item.icon;
+                                return (
+                                    <Button key={idx} asChild variant="ghost" className="w-full justify-between group h-auto py-3 px-3 hover:bg-muted/50 border border-transparent hover:border-border transition-all">
+                                        <Link href={item.href}>
+                                            <div className="flex items-start gap-3 text-left">
+                                                <div className={`mt-0.5 h-8 w-8 rounded-full ${item.bg} flex items-center justify-center shrink-0`}>
+                                                    <Icon className={`h-4 w-4 ${item.color}`} />
+                                                </div>
+                                                <div>
+                                                    <p className="font-medium text-sm text-foreground">{item.title}</p>
+                                                    <p className="text-xs text-muted-foreground font-normal mt-0.5">{item.description}</p>
+                                                </div>
+                                            </div>
+                                            <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2" />
+                                        </Link>
+                                    </Button>
+                                );
+                            })
+                        ) : (
+                            <div className="text-center py-6 text-sm text-muted-foreground my-auto">
+                                <CheckCircle2 className="w-8 h-8 mx-auto text-emerald-500 mb-2 opacity-80" />
+                                <p>You&apos;re all caught up!</p>
                             </div>
                         )}
                     </CardContent>

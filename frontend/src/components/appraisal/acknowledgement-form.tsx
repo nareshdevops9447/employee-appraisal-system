@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import type { Appraisal, GoalForAssessment } from "@/types/appraisal";
 import { FinalSummary } from "@/components/appraisal/FinalSummary";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import confetti from "canvas-confetti";
 
 export function AcknowledgementForm({ appraisal, goals }: { appraisal: Appraisal; goals?: GoalForAssessment[] }) {
     const queryClient = useQueryClient();
@@ -27,6 +28,14 @@ export function AcknowledgementForm({ appraisal, goals }: { appraisal: Appraisal
             return data;
         },
         onSuccess: () => {
+            if (!isDispute) {
+                confetti({
+                    particleCount: 150,
+                    spread: 80,
+                    origin: { y: 0.6 },
+                    colors: ['#26ccff', '#a25afd', '#ff5e7e', '#88ff5a', '#fcff42', '#ffa62d', '#ff36ff']
+                });
+            }
             toast.success(isDispute ? "Appraisal acknowledged with a note." : "Appraisal acknowledged successfully.");
             queryClient.invalidateQueries({ queryKey: ["appraisals", appraisal.id] });
             queryClient.invalidateQueries({ queryKey: ["appraisals"] });

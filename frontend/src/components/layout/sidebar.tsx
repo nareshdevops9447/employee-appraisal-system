@@ -55,6 +55,12 @@ const mainNavItems = [
         roles: ["manager", "hr_admin", "super_admin"],
     },
     {
+        name: "1-on-1s",
+        href: "/discussions",
+        icon: MessageSquareWarning,
+        roles: ["employee", "manager", "hr_admin", "super_admin"],
+    },
+    {
         name: "Notifications",
         href: "/notifications",
         icon: Bell,

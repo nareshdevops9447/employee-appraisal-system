@@ -5,9 +5,11 @@ import { useTeamMembers, TeamMember } from "@/hooks/use-team";
 import { useDepartments } from "@/hooks/use-departments";
 import { TeamMemberCard } from "@/components/team/team-member-card";
 import { PushTemplatesDialog } from "@/components/team/push-templates-dialog";
+import { useDiscussions } from "@/hooks/use-discussions";
+import { useLeaveBalances } from "@/hooks/use-leave";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Send } from "lucide-react";
+import { Search, Send, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -43,6 +45,9 @@ export default function TeamPage() {
         department_id: department === "all" ? undefined : department,
         scope: scope === 'all' ? 'all' : undefined,
     });
+
+    const { data: discussions, isLoading: discussionsLoading } = useDiscussions(selectedMember?.id);
+    const { data: leaveBalances, isLoading: leaveBalancesLoading } = useLeaveBalances(new Date().getFullYear(), selectedMember?.id);
 
     return (
         <div className="space-y-6">
@@ -189,10 +194,46 @@ export default function TeamPage() {
                                 </div>
 
                                 <div>
-                                    <h3 className="text-lg font-semibold mb-3">Recent Activity</h3>
+                                    <h3 className="text-lg font-semibold mb-3">Leave Balances</h3>
+                                    {leaveBalancesLoading ? (
+                                        <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground"/></div>
+                                    ) : leaveBalances && leaveBalances.length > 0 ? (
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {leaveBalances.map((balance, idx) => (
+                                                <div key={idx} className="bg-muted/40 p-3 rounded-lg flex flex-col items-center text-center">
+                                                    <span className="text-sm font-medium">{balance.leave_type_name}</span>
+                                                    <span className="text-xl font-bold mt-1 text-primary">{balance.remaining_days} <span className="text-sm font-normal text-muted-foreground">days</span></span>
+                                                    <span className="text-xs text-muted-foreground mt-1">out of {balance.total_days}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="text-sm text-muted-foreground italic">No leave balances found.</p>
+                                    )}
+                                </div>
+
+                                <Separator />
+
+                                <div>
+                                    <h3 className="text-lg font-semibold mb-3">Recent 1-on-1 Notes</h3>
                                     <div className="space-y-4">
-                                        <p className="text-sm text-muted-foreground italic">No recent activity found.</p>
-                                        {/* Maps activity feed here */}
+                                        {discussionsLoading ? (
+                                            <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground"/></div>
+                                        ) : discussions && discussions.length > 0 ? (
+                                            discussions.slice(0, 3).map((disc) => (
+                                                <div key={disc.id} className="p-3 rounded-lg border bg-card text-card-foreground shadow-sm">
+                                                    <div className="flex items-center justify-between mb-2">
+                                                        <span className="text-xs font-semibold px-2 py-0.5 rounded bg-primary/10 text-primary">
+                                                            {new Date(disc.meeting_date).toLocaleDateString()}
+                                                        </span>
+                                                        {disc.is_private && <span className="text-xs text-muted-foreground flex items-center gap-1">🔒 Private</span>}
+                                                    </div>
+                                                    <p className="text-sm line-clamp-3 whitespace-pre-wrap">{disc.content}</p>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <p className="text-sm text-muted-foreground italic">No recent 1-on-1 notes found.</p>
+                                        )}
                                     </div>
                                 </div>
                             </div>

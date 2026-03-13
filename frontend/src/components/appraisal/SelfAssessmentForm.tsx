@@ -6,11 +6,38 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Save, Send, Star, Loader2, CheckCircle2 } from "lucide-react";
+import { Save, Send, Star, Loader2, CheckCircle2, HelpCircle } from "lucide-react";
 import { useAppraisalSelfAssessments, useUpsertSelfAssessment, useSubmitSelfAssessment } from "@/hooks/use-self-assessments";
 import { useCycleAttributeTemplates, useEmployeeAttributeRatings, useRateEmployeeAttribute } from "@/hooks/use-attribute-templates";
 import type { Appraisal, GoalForAssessment } from "@/types/appraisal";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+
+const RatingGuide = () => (
+    <div className="space-y-2 p-1">
+        <h4 className="font-medium text-sm border-b pb-1 mb-2">Rating Scale Guide</h4>
+        <div className="grid grid-cols-[30px_1fr] gap-x-2 gap-y-1 text-xs">
+            <span className="font-bold text-red-600">1.0</span>
+            <span className="text-muted-foreground">Needs Improvement / Unsatisfactory</span>
+            
+            <span className="font-bold text-amber-600">2.0</span>
+            <span className="text-muted-foreground">Developing / Below Expectations</span>
+            
+            <span className="font-bold text-blue-600">3.0</span>
+            <span className="text-muted-foreground">Meets Expectations / Satisfactory</span>
+            
+            <span className="font-bold text-green-600">4.0</span>
+            <span className="text-muted-foreground">Exceeds Expectations / Above Average</span>
+            
+            <span className="font-bold text-emerald-600">5.0</span>
+            <span className="text-muted-foreground">Outstanding / Exceptional</span>
+        </div>
+        <p className="text-[10px] italic text-muted-foreground mt-2 pt-1 border-t">
+            * Precision decimals (e.g. 3.75) are supported.
+        </p>
+    </div>
+);
 
 interface SelfAssessmentFormProps {
     appraisal: Appraisal;
@@ -34,7 +61,7 @@ export function SelfAssessmentForm({ appraisal, goals }: SelfAssessmentFormProps
 
     const [lastSaved, setLastSaved] = useState<string | null>(null);
     const [showConfirm, setShowConfirm] = useState(false);
-    const [activeTab, setActiveTab] = useState("goals");
+    const [step, setStep] = useState(1);
 
     // Initialize Goal state
     useEffect(() => {
@@ -75,11 +102,27 @@ export function SelfAssessmentForm({ appraisal, goals }: SelfAssessmentFormProps
     }, [attributeTemplates, attributeRatings]);
 
     const updateGoalRating = useCallback((goalId: string, field: "rating" | "comment", value: number | string) => {
-        setGoalRatings((prev) => ({ ...prev, [goalId]: { ...prev[goalId], [field]: value } }));
+        let finalValue = value;
+        if (field === "rating") {
+            const num = typeof value === "string" ? parseFloat(value) : value;
+            if (num > 5) {
+                finalValue = 5;
+                toast.error("Rating cannot exceed 5.0");
+            }
+        }
+        setGoalRatings((prev) => ({ ...prev, [goalId]: { ...prev[goalId], [field]: finalValue } }));
     }, []);
 
     const updateAttrRating = useCallback((templateId: string, field: "rating" | "comment", value: number | string) => {
-        setAttrRatings((prev) => ({ ...prev, [templateId]: { ...prev[templateId], [field]: value } }));
+        let finalValue = value;
+        if (field === "rating") {
+            const num = typeof value === "string" ? parseFloat(value) : value;
+            if (num > 5) {
+                finalValue = 5;
+                toast.error("Rating cannot exceed 5.0");
+            }
+        }
+        setAttrRatings((prev) => ({ ...prev, [templateId]: { ...prev[templateId], [field]: finalValue } }));
     }, []);
 
     // Deadline warning
@@ -121,8 +164,8 @@ export function SelfAssessmentForm({ appraisal, goals }: SelfAssessmentFormProps
         return <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>;
     }
 
-    const performanceGoals = goals.filter(g => g.goal_type === 'performance');
-    const ratedGoalsCount = performanceGoals.filter(g => (goalRatings[g.id]?.rating ?? 0) > 0 && (goalRatings[g.id]?.comment ?? "").trim().length > 0).length;
+    const performanceGoals = goals.filter((g) => g.goal_type === 'performance');
+    const ratedGoalsCount = performanceGoals.filter((g) => (goalRatings[g.id]?.rating ?? 0) > 0 && (goalRatings[g.id]?.comment ?? "").trim().length > 0).length;
     const ratedAttrsCount = (attributeTemplates || []).filter(t => (attrRatings[t.id]?.rating ?? 0) > 0 && (attrRatings[t.id]?.comment ?? "").trim().length > 0).length;
     const allGoalsRated = ratedGoalsCount === performanceGoals.length && performanceGoals.length > 0;
     const allAttrsRated = ratedAttrsCount === (attributeTemplates?.length || 0) && (attributeTemplates?.length || 0) > 0;
@@ -146,19 +189,34 @@ export function SelfAssessmentForm({ appraisal, goals }: SelfAssessmentFormProps
                 {deadline && <Badge variant={isNearDeadline ? "destructive" : "secondary"}>Deadline: {deadline.toLocaleDateString()}</Badge>}
             </div>
 
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-                <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="goals">
-                        Performance Goals
-                        {allGoalsRated && <CheckCircle2 className="w-4 h-4 ml-2 text-green-500" />}
-                    </TabsTrigger>
-                    <TabsTrigger value="attributes">
-                        Behavioral Attributes
-                        {allAttrsRated && <CheckCircle2 className="w-4 h-4 ml-2 text-green-500" />}
-                    </TabsTrigger>
-                </TabsList>
+            {/* Stepper Header */}
+            <div className="flex justify-between items-center mb-8 px-2 relative">
+                <div className="absolute left-0 right-0 top-4 h-0.5 bg-muted -z-10" />
+                {[1, 2].map((s) => (
+                    <div key={s} className="flex flex-col items-center gap-2 bg-card px-2">
+                        <div className={cn(
+                            "h-8 w-8 rounded-full flex items-center justify-center font-bold text-sm transition-colors",
+                            step === s ? "bg-primary text-primary-foreground shadow-md ring-2 ring-primary ring-offset-2 ring-offset-background" : 
+                            step > s ? "bg-primary text-primary-foreground opacity-70" : "bg-muted text-muted-foreground"
+                        )}>
+                            {s}
+                        </div>
+                        <span className={cn(
+                            "text-xs font-medium flex items-center gap-1",
+                            step === s ? "text-primary" : "text-muted-foreground"
+                        )}>
+                            {s === 1 ? 'Performance Goals' : 'Behavioral Attributes'}
+                            {s === 1 && allGoalsRated && <CheckCircle2 className="w-3 h-3 text-green-500" />}
+                            {s === 2 && allAttrsRated && <CheckCircle2 className="w-3 h-3 text-green-500" />}
+                        </span>
+                    </div>
+                ))}
+            </div>
 
-                <TabsContent value="goals" className="space-y-4">
+            <div className="min-h-[300px]">
+                {/* STEP 1: Performance Goals */}
+                {step === 1 && (
+                    <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
                     {goals.map((goal) => {
                         const r = goalRatings[goal.id] || { rating: 0, comment: "" };
                         const isMandatory = goal.goal_type === 'performance';
@@ -179,19 +237,36 @@ export function SelfAssessmentForm({ appraisal, goals }: SelfAssessmentFormProps
                                 </CardHeader>
                                 <CardContent className="space-y-4">
                                     <div>
-                                        <label className="text-sm font-medium">Self Rating {isMandatory && <span className="text-destructive">*</span>}</label>
-                                        <div className="flex gap-3 mt-1 items-center">
-                                            <Input
-                                                type="number"
-                                                min="1"
-                                                max="5"
-                                                step="0.01"
-                                                value={r.rating > 0 ? r.rating : ""}
-                                                onChange={(e) => updateGoalRating(goal.id, "rating", parseFloat(e.target.value) || 0)}
-                                                placeholder="e.g. 4.2"
-                                                className="w-32"
-                                            />
-                                            <span className="text-sm text-muted-foreground">/ 5</span>
+                                        <div className="flex items-center gap-2">
+                                            <label className="text-sm font-medium">Self Rating {isMandatory && <span className="text-destructive">*</span>}</label>
+                                            <Popover>
+                                                <PopoverTrigger asChild>
+                                                    <Button variant="ghost" size="icon" className="h-4 w-4 rounded-full p-0">
+                                                        <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent side="right" className="w-64">
+                                                    <RatingGuide />
+                                                </PopoverContent>
+                                            </Popover>
+                                        </div>
+                                        <div className="flex flex-col gap-1 mt-1">
+                                            <div className="flex gap-3 items-center">
+                                                <Input
+                                                    type="number"
+                                                    min="1"
+                                                    max="5"
+                                                    step="0.01"
+                                                    value={r.rating > 0 ? r.rating : ""}
+                                                    onChange={(e) => updateGoalRating(goal.id, "rating", parseFloat(e.target.value) || 0)}
+                                                    placeholder="e.g. 4.2"
+                                                    className="w-32"
+                                                />
+                                                <span className="text-sm text-muted-foreground">out of 5</span>
+                                            </div>
+                                            <span className="text-xs text-muted-foreground mt-1">
+                                                Rate from 1 (Low) to 5 (High). Decimals allowed (e.g., 4.5).
+                                            </span>
                                         </div>
                                     </div>
                                     <div>
@@ -207,9 +282,12 @@ export function SelfAssessmentForm({ appraisal, goals }: SelfAssessmentFormProps
                             </Card>
                         );
                     })}
-                </TabsContent>
+                    </div>
+                )}
 
-                <TabsContent value="attributes" className="space-y-4">
+                {/* STEP 2: Behavioral Attributes */}
+                {step === 2 && (
+                    <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
                     {attributeTemplates?.length === 0 ? (
                         <Card><CardContent className="p-6 text-center text-muted-foreground">No behavioral attributes defined for this cycle.</CardContent></Card>
                     ) : (
@@ -231,19 +309,36 @@ export function SelfAssessmentForm({ appraisal, goals }: SelfAssessmentFormProps
                                     </CardHeader>
                                     <CardContent className="space-y-4">
                                         <div>
-                                            <label className="text-sm font-medium">Self Rating <span className="text-destructive">*</span></label>
-                                            <div className="flex gap-3 mt-1 items-center">
-                                                <Input
-                                                    type="number"
-                                                    min="1"
-                                                    max="5"
-                                                    step="0.01"
-                                                    value={r.rating > 0 ? r.rating : ""}
-                                                    onChange={(e) => updateAttrRating(template.id, "rating", parseFloat(e.target.value) || 0)}
-                                                    placeholder="e.g. 3.5"
-                                                    className="w-32"
-                                                />
-                                                <span className="text-sm text-muted-foreground">/ 5</span>
+                                            <div className="flex items-center gap-2">
+                                                <label className="text-sm font-medium">Self Rating <span className="text-destructive">*</span></label>
+                                                <Popover>
+                                                    <PopoverTrigger asChild>
+                                                        <Button variant="ghost" size="icon" className="h-4 w-4 rounded-full p-0">
+                                                            <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                                                        </Button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent side="right" className="w-64">
+                                                        <RatingGuide />
+                                                    </PopoverContent>
+                                                </Popover>
+                                            </div>
+                                            <div className="flex flex-col gap-1 mt-1">
+                                                <div className="flex gap-3 items-center">
+                                                    <Input
+                                                        type="number"
+                                                        min="1"
+                                                        max="5"
+                                                        step="0.01"
+                                                        value={r.rating > 0 ? r.rating : ""}
+                                                        onChange={(e) => updateAttrRating(template.id, "rating", parseFloat(e.target.value) || 0)}
+                                                        placeholder="e.g. 3.5"
+                                                        className="w-32"
+                                                    />
+                                                    <span className="text-sm text-muted-foreground">out of 5</span>
+                                                </div>
+                                                <span className="text-xs text-muted-foreground mt-1">
+                                                    Rate from 1 (Low) to 5 (High). Decimals allowed (e.g., 4.5).
+                                                </span>
                                             </div>
                                         </div>
                                         <div>
@@ -260,13 +355,54 @@ export function SelfAssessmentForm({ appraisal, goals }: SelfAssessmentFormProps
                             );
                         })
                     )}
-                </TabsContent>
-            </Tabs>
+                    </div>
+                )}
+            </div>
 
-            {/* Action buttons */}
+            {/* Action buttons Context */}
             <div className="flex items-center justify-between border-t border-border pt-4 mt-6">
-                <div className="flex flex-col gap-1">
-                    <div className="text-sm font-medium">Submission Readiness (Both sections required)</div>
+                <div className="flex items-center gap-2">
+                    {step > 1 && (
+                        <Button variant="outline" onClick={() => setStep(s => s - 1)}>
+                            Previous
+                        </Button>
+                    )}
+                    {step < 2 && (
+                        <Button onClick={() => setStep(s => s + 1)}>
+                            Next Step
+                        </Button>
+                    )}
+                </div>
+                
+                <div className="flex gap-3 items-center">
+                    <div className="text-sm text-muted-foreground mr-2">{lastSaved && `Draft saved at ${lastSaved}`}</div>
+                    <Button variant="outline" onClick={handleSaveAllDrafts} disabled={selfSave.isPending || rateAttribute.isPending}>
+                        <Save className="mr-2 h-4 w-4" /> Save All Drafts
+                    </Button>
+
+                    {step === 2 && (
+                        !showConfirm ? (
+                            <Button disabled={!isReadyToSubmit} onClick={() => setShowConfirm(true)}>
+                                <Send className="mr-2 h-4 w-4" /> Submit Self Review
+                            </Button>
+                        ) : (
+                            <div className="flex items-center gap-2">
+                                <span className="text-sm text-destructive font-medium">This cannot be undone.</span>
+                                <Button variant="destructive" onClick={handleSubmit} disabled={selfSubmit.isPending}>
+                                    {selfSubmit.isPending ? "Submitting..." : "Confirm Submit"}
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={() => setShowConfirm(false)}>Cancel</Button>
+                            </div>
+                        )
+                    )}
+                </div>
+            </div>
+
+            {step === 2 && !isReadyToSubmit && (
+                <div className="flex flex-col items-end gap-1 mt-2">
+                    <p className="text-sm text-amber-600 text-right">
+                        You must rate and comment on all mandatory performance goals and behavioral attributes before submitting.
+                    </p>
                     <div className="text-xs flex gap-4">
                         <span className={allGoalsRated ? "text-green-600 font-medium" : "text-amber-600"}>
                             Performance Goals: {ratedGoalsCount} / {performanceGoals.length} completed
@@ -276,27 +412,7 @@ export function SelfAssessmentForm({ appraisal, goals }: SelfAssessmentFormProps
                         </span>
                     </div>
                 </div>
-                <div className="flex gap-3 items-center">
-                    <div className="text-sm text-muted-foreground mr-2">{lastSaved && `Draft saved at ${lastSaved}`}</div>
-                    <Button variant="outline" onClick={handleSaveAllDrafts} disabled={selfSave.isPending || rateAttribute.isPending}>
-                        <Save className="mr-2 h-4 w-4" /> Save All Drafts
-                    </Button>
-
-                    {!showConfirm ? (
-                        <Button disabled={!isReadyToSubmit} onClick={() => setShowConfirm(true)}>
-                            <Send className="mr-2 h-4 w-4" /> Submit Self Review
-                        </Button>
-                    ) : (
-                        <div className="flex items-center gap-2">
-                            <span className="text-sm text-destructive font-medium">This cannot be undone.</span>
-                            <Button variant="destructive" onClick={handleSubmit} disabled={selfSubmit.isPending}>
-                                {selfSubmit.isPending ? "Submitting..." : "Confirm Submit"}
-                            </Button>
-                            <Button variant="ghost" size="sm" onClick={() => setShowConfirm(false)}>Cancel</Button>
-                        </div>
-                    )}
-                </div>
-            </div>
+            )}
 
             {!isReadyToSubmit && (
                 <p className="text-sm text-amber-600 text-right">

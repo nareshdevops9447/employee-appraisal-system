@@ -104,3 +104,25 @@ export function useAttendanceSummary(userId: string, startDate: string, endDate:
         enabled: !!userId && !!startDate && !!endDate,
     });
 }
+
+export function useCalendarEvents(start: Date, end: Date, userId?: string) {
+    return useQuery({
+        queryKey: ['timesheet', 'calendar', start.toISOString(), end.toISOString(), userId],
+        queryFn: async () => {
+            const { data } = await apiClient.get<any[]>('/api/timesheet/calendar', {
+                params: {
+                    start: start.toISOString(),
+                    end: end.toISOString(),
+                    ...(userId ? { user_id: userId } : {})
+                }
+            });
+            // Convert string dates to Date objects for react-big-calendar
+            return data.map(event => ({
+                ...event,
+                start: new Date(event.start),
+                end: new Date(event.end)
+            }));
+        },
+        enabled: !!start && !!end,
+    });
+}

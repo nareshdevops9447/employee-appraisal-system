@@ -78,9 +78,9 @@ export function GoalCard({ goal }: GoalCardProps) {
             </CardHeader>
             <CardContent className="flex-1 pb-3">
                 {goal.description && (
-                    <p className="text-muted-foreground text-sm line-clamp-2 mb-4">
-                        {goal.description}
-                    </p>
+                    <div className="mb-4">
+                        <div className="text-sm text-muted-foreground line-clamp-2 prose prose-sm dark:prose-invert max-w-none [&>p]:m-0" dangerouslySetInnerHTML={{ __html: goal.description }} />
+                    </div>
                 )}
 
                 {/* Show rejection reason */}

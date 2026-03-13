@@ -5,20 +5,25 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
-import { Loader2, Send, Users, Globe, Building2, CheckCircle2, Clock, FileText, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+    DialogFooter,
+} from "@/components/ui/dialog";
+import { Loader2, Send, Users, Globe, Building2, CheckCircle2, Clock, FileText, Calendar, ChevronLeft, ChevronRight, Check, ChevronsUpDown } from "lucide-react";
 import { useTeamMembers } from "@/hooks/use-team";
 import { useMyDepartmentTemplates, usePushTemplatesToTeam, GoalTemplate } from "@/hooks/use-goal-templates";
 import { useGoals } from "@/hooks/use-goals";
 import { useAllActiveCycles, useActiveAppraisal } from "@/hooks/use-appraisals";
 import { Goal } from "@/types/goal";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 
 /* ─── Status badge helper ──────────────────────────────────────────── */
 function StatusBadge({ status }: { status: string }) {
@@ -110,6 +115,7 @@ function CycleBadge({ cycleType, cycleName }: { cycleType?: string | null; cycle
 export function TeamGoalsPanel() {
     const [selectedMemberId, setSelectedMemberId] = useState<string>("");
     const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
+    const [openCombobox, setOpenCombobox] = useState(false);
 
     // Data hooks
     const { data: allActiveCycles } = useAllActiveCycles();
@@ -222,7 +228,7 @@ export function TeamGoalsPanel() {
                 .map((t) => t.id);
             setSelectedTemplateIds(preChecked);
         }
-    }, [selectedMemberId, memberGoals]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [selectedMemberId, memberGoals]);
 
     const toggleTemplate = (id: string) => {
         setSelectedTemplateIds((prev) =>
@@ -284,38 +290,73 @@ export function TeamGoalsPanel() {
                             <Users className="w-4 h-4 text-primary" />
                             <span className="text-sm font-medium">Team Member:</span>
                             <div className="flex items-center gap-1">
-                                <Button
-                                    variant="outline"
-                                    size="icon"
-                                    className="h-8 w-8 shrink-0"
-                                    onClick={() => navigateMember('prev')}
-                                    disabled={!teamMembers?.length}
-                                    title="Previous team member"
-                                >
-                                    <ChevronLeft className="h-4 w-4" />
-                                </Button>
-                                <Select value={selectedMemberId} onValueChange={handleMemberChange}>
-                                    <SelectTrigger className="w-[220px]">
-                                        <SelectValue placeholder="Select a member…" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {teamMembers?.map((member) => (
-                                            <SelectItem key={member.id} value={member.id}>
-                                                {member.name || `${member.first_name} ${member.last_name}`}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <Button
-                                    variant="outline"
-                                    size="icon"
-                                    className="h-8 w-8 shrink-0"
-                                    onClick={() => navigateMember('next')}
-                                    disabled={!teamMembers?.length}
-                                    title="Next team member"
-                                >
-                                    <ChevronRight className="h-4 w-4" />
-                                </Button>
+                                {selectedMemberId && (
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        className="h-8 w-8 shrink-0"
+                                        onClick={() => navigateMember('prev')}
+                                        disabled={!teamMembers?.length}
+                                        title="Previous team member"
+                                    >
+                                        <ChevronLeft className="h-4 w-4" />
+                                    </Button>
+                                )}
+                                <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            aria-expanded={openCombobox}
+                                            className="w-[220px] justify-between"
+                                        >
+                                            {selectedMemberId
+                                                ? teamMembers?.find((m) => m.id === selectedMemberId)?.name || "Select a member..."
+                                                : "Select a member..."}
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[220px] p-0">
+                                        <Command>
+                                            <CommandInput placeholder="Search member..." />
+                                            <CommandList>
+                                                <CommandEmpty>No member found.</CommandEmpty>
+                                                <CommandGroup>
+                                                    {teamMembers?.map((member) => (
+                                                        <CommandItem
+                                                            key={member.id}
+                                                            value={member.name || `${member.first_name} ${member.last_name}`}
+                                                            onSelect={() => {
+                                                                handleMemberChange(member.id);
+                                                                setOpenCombobox(false);
+                                                            }}
+                                                        >
+                                                            <Check
+                                                                className={cn(
+                                                                    "mr-2 h-4 w-4",
+                                                                    selectedMemberId === member.id ? "opacity-100" : "opacity-0"
+                                                                )}
+                                                            />
+                                                            {member.name || `${member.first_name} ${member.last_name}`}
+                                                        </CommandItem>
+                                                    ))}
+                                                </CommandGroup>
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
+                                {selectedMemberId && (
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        className="h-8 w-8 shrink-0"
+                                        onClick={() => navigateMember('next')}
+                                        disabled={!teamMembers?.length}
+                                        title="Next team member"
+                                    >
+                                        <ChevronRight className="h-4 w-4" />
+                                    </Button>
+                                )}
                             </div>
                             {selectedMemberId && teamMembers && (
                                 <span className="text-xs text-muted-foreground">
@@ -400,9 +441,10 @@ export function TeamGoalsPanel() {
                                                         <ScopeLabel departmentId={tmpl.department_id} departmentName={tmpl.department_name} />
                                                     </div>
                                                     {tmpl.description && (
-                                                        <p className="text-xs text-muted-foreground line-clamp-2">{tmpl.description}</p>
+                                                        <div className="text-xs text-muted-foreground line-clamp-2 prose prose-sm dark:prose-invert max-w-none [&>p]:m-0" dangerouslySetInnerHTML={{ __html: tmpl.description }} />
                                                     )}
                                                 </div>
+                                                <BulkAssignDialog template={tmpl} cycleName={group.cycleName} />
                                             </div>
                                         ))}
                                     </div>
@@ -476,7 +518,7 @@ export function TeamGoalsPanel() {
                                                         )}
                                                     </div>
                                                     {tmpl.description && (
-                                                        <p className="text-xs text-muted-foreground line-clamp-2">{tmpl.description}</p>
+                                                        <div className="text-xs text-muted-foreground line-clamp-2 prose prose-sm dark:prose-invert max-w-none [&>p]:m-0" dangerouslySetInnerHTML={{ __html: tmpl.description }} />
                                                     )}
                                                 </div>
                                             </div>
@@ -509,5 +551,90 @@ export function TeamGoalsPanel() {
                 </>
             )}
         </div>
+    );
+}
+
+/* ─── Bulk Assign Dialog ────────────────────────────────────────────── */
+
+function BulkAssignDialog({ template, cycleName }: { template: GoalTemplate, cycleName: string }) {
+    const [open, setOpen] = useState(false);
+    const { data: teamMembers, isLoading } = useTeamMembers();
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const pushTemplates = usePushTemplatesToTeam();
+
+    // Reset selection when opened
+    useEffect(() => {
+        if (open && teamMembers) {
+            setSelectedIds(teamMembers.map(m => m.id)); // Default to select all
+        }
+    }, [open, teamMembers]);
+
+    const toggleMember = (id: string) => {
+        setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    };
+
+    const handleAssign = () => {
+        if (selectedIds.length === 0) return;
+        pushTemplates.mutate({
+            template_ids: [template.id],
+            cycle_id: template.cycle_id,
+            employee_ids: selectedIds
+        }, {
+            onSuccess: () => setOpen(false)
+        });
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button variant="outline" size="sm" className="shrink-0 mt-1">
+                    <Users className="w-3.5 h-3.5 mr-2" /> Assign to Team
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                    <DialogTitle>Assign Goal to Team</DialogTitle>
+                    <DialogDescription>
+                        Select team members to assign the goal <strong>{template.title}</strong> to for the {cycleName} cycle.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div className="py-4 space-y-4">
+                    <div className="flex items-center justify-between pb-2 border-b">
+                        <span className="text-sm font-medium">Team Members ({selectedIds.length} selected)</span>
+                        <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => setSelectedIds(selectedIds.length === teamMembers?.length ? [] : teamMembers?.map(m => m.id) || [])}
+                        >
+                            {selectedIds.length === teamMembers?.length ? "Deselect All" : "Select All"}
+                        </Button>
+                    </div>
+                    
+                    {isLoading ? (
+                        <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+                    ) : (
+                        <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
+                            {teamMembers?.map(member => (
+                                <div key={member.id} className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded-md cursor-pointer" onClick={() => toggleMember(member.id)}>
+                                    <Checkbox id={`m-${member.id}`} checked={selectedIds.includes(member.id)} onCheckedChange={() => toggleMember(member.id)} />
+                                    <label htmlFor={`m-${member.id}`} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1">
+                                        {member.name || `${member.first_name} ${member.last_name}`}
+                                    </label>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+                    <Button onClick={handleAssign} disabled={selectedIds.length === 0 || pushTemplates.isPending}>
+                        {pushTemplates.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                        Assign to {selectedIds.length} members
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 }

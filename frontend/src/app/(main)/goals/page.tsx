@@ -190,22 +190,49 @@ function GoalsContent() {
                     {goalsLoading ? (
                         <GoalsPageSkeleton />
                     ) : filteredGoals?.length === 0 ? (
-                        <div className="text-center py-16">
-                            <div className="mx-auto h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
-                                <Target className="h-8 w-8 text-muted-foreground" />
+                        <div className="text-center py-16 border-2 border-dashed rounded-xl bg-muted/10 mx-auto max-w-4xl">
+                            <div className="mx-auto h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-6">
+                                <Target className="h-8 w-8 text-primary" />
                             </div>
-                            <h3 className="text-lg font-semibold mb-1">No goals found</h3>
-                            <p className="text-muted-foreground text-sm mb-6 max-w-sm mx-auto">
+                            <h3 className="text-xl font-bold tracking-tight mb-2">
+                                {goals?.length === 0 ? "Let's set your goals" : "No goals match your search"}
+                            </h3>
+                            <p className="text-muted-foreground text-sm mb-8 max-w-md mx-auto">
                                 {goals?.length === 0
-                                    ? "You haven't created any goals yet. Start by setting your first objective."
-                                    : "No goals match your current filters. Try adjusting your search criteria."
+                                    ? "Setting clear, measurable goals is the first step to advancing your career. Choose how you'd like to get started below."
+                                    : "Try adjusting your filters, or clear them to see all your goals."
                                 }
                             </p>
-                            {goals?.length === 0 && (
-                                <Button asChild>
-                                    <Link href="/goals/new">
-                                        <Plus className="mr-2 h-4 w-4" /> Create Your First Goal
-                                    </Link>
+                            {goals?.length === 0 ? (
+                                <div className="grid sm:grid-cols-2 gap-4 max-w-2xl mx-auto px-4">
+                                    <Card 
+                                        className="hover:border-primary hover:shadow-md transition-all cursor-pointer group" 
+                                        onClick={() => (window.location.href='/goals/new')}
+                                    >
+                                        <CardContent className="p-6 text-center flex flex-col items-center space-y-3">
+                                            <div className="h-12 w-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                                                <Plus className="w-6 h-6"/>
+                                            </div>
+                                            <h4 className="font-semibold text-foreground">Create from Scratch</h4>
+                                            <p className="text-xs text-muted-foreground">Define a custom goal using our guided step-by-step wizard.</p>
+                                        </CardContent>
+                                    </Card>
+                                    <Card 
+                                        className="hover:border-primary hover:shadow-md transition-all cursor-pointer group" 
+                                        onClick={() => (window.location.href='/goals/new?category=mission_aligned')}
+                                    >
+                                        <CardContent className="p-6 text-center flex flex-col items-center space-y-3">
+                                            <div className="h-12 w-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                                                <Target className="w-6 h-6"/>
+                                            </div>
+                                            <h4 className="font-semibold text-foreground">Mission Aligned</h4>
+                                            <p className="text-xs text-muted-foreground">Create a goal that directly aligns with core company objectives.</p>
+                                        </CardContent>
+                                    </Card>
+                                </div>
+                            ) : (
+                                <Button variant="outline" onClick={() => window.location.href='/goals'}>
+                                    Clear all filters
                                 </Button>
                             )}
                         </div>

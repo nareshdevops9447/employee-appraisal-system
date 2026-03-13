@@ -14,13 +14,13 @@ export function useLeaveTypes() {
     });
 }
 
-export function useLeaveBalances(year?: number) {
+export function useLeaveBalances(year?: number, employeeId?: string) {
     return useQuery({
-        queryKey: ['leave', 'balances', year],
+        queryKey: ['leave', 'balances', year, employeeId],
         queryFn: async () => {
-            const { data } = await apiClient.get<LeaveBalance[]>('/api/leave/balance', {
-                params: { year }
-            });
+            const params: Record<string, any> = { year };
+            if (employeeId) params.employee_id = employeeId;
+            const { data } = await apiClient.get<LeaveBalance[]>('/api/leave/balance', { params });
             return data;
         },
     });
