@@ -257,7 +257,12 @@ export function ManagerReviewForm({ appraisal, goals, readOnly = false }: Manage
             <div className="flex justify-between items-center mb-8 px-2 relative">
                 <div className="absolute left-0 right-0 top-4 h-0.5 bg-muted -z-10" />
                 {[1, 2, 3].map((s) => (
-                    <div key={s} className="flex flex-col items-center gap-2 bg-card px-2">
+                    <button 
+                        key={s} 
+                        type="button"
+                        onClick={() => setStep(s)}
+                        className="flex flex-col items-center gap-2 bg-card px-2 cursor-pointer transition-opacity hover:opacity-80"
+                    >
                         <div className={cn(
                             "h-8 w-8 rounded-full flex items-center justify-center font-bold text-sm transition-colors",
                             step === s ? "bg-primary text-primary-foreground shadow-md ring-2 ring-primary ring-offset-2 ring-offset-background" : 
@@ -274,7 +279,7 @@ export function ManagerReviewForm({ appraisal, goals, readOnly = false }: Manage
                             {s === 2 && allAttrsRated && <CheckCircle2 className="w-3 h-3 text-green-500" />}
                             {s === 3 && isOverallReady && <CheckCircle2 className="w-3 h-3 text-green-500" />}
                         </span>
-                    </div>
+                    </button>
                 ))}
             </div>
 
@@ -575,55 +580,58 @@ export function ManagerReviewForm({ appraisal, goals, readOnly = false }: Manage
                             </div>
                         </CardContent>
                     </Card>
+                    </div>
+                )}
+            </div>
 
-                    {/* Submit Area Context */}
-                    <div className="flex items-center justify-between border-t border-border pt-4 mt-6">
-                        <div className="flex items-center gap-2">
-                            {step > 1 && (
-                                <Button variant="outline" onClick={() => setStep(s => s - 1)}>
-                                    Previous
-                                </Button>
-                            )}
-                            {step < 3 && (
-                                <Button onClick={() => setStep(s => s + 1)}>
-                                    Next Step
-                                </Button>
-                            )}
-                        </div>
-                        
-                        {!readOnly && step === 3 && (
-                            <div className="flex items-center justify-end gap-3">
-                                {!showConfirm ? (
-                                    <Button disabled={!isReadyToSubmit} onClick={() => setShowConfirm(true)} size="lg">
-                                        <Send className="mr-2 h-4 w-4" />
-                                        Finalize Manager Review
-                                    </Button>
-                                ) : (
-                                    <div className="flex items-center gap-2 p-3 border rounded-lg bg-red-50">
-                                        <span className="text-sm text-destructive font-medium">
-                                            This finalizes the review and sends it to the employee for acknowledgement.
-                                        </span>
-                                        <Button
-                                            variant="destructive"
-                                            onClick={handleSubmit}
-                                            disabled={submitReview.isPending}
-                                        >
-                                            {submitReview.isPending ? "Submitting..." : "Confirm Submit"}
-                                        </Button>
-                                        <Button variant="ghost" onClick={() => setShowConfirm(false)}>
-                                            Cancel
-                                        </Button>
-                                    </div>
-                                )}
-                            </div>
+            {/* Common Navigation Block */}
+            <div className="flex flex-col gap-4 border-t border-border pt-4 mt-6">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        {step > 1 && (
+                            <Button variant="outline" onClick={() => setStep(s => s - 1)}>
+                                Previous
+                            </Button>
+                        )}
+                        {step < 3 && (
+                            <Button onClick={() => setStep(s => s + 1)}>
+                                Next Step
+                            </Button>
                         )}
                     </div>
-                    {!readOnly && step === 3 && !isReadyToSubmit && (
-                        <p className="text-sm text-amber-600 text-right mt-2">
-                            You must rate and comment on all Goals and Attributes, and provide an Overall Rating/Feedback.
-                        </p>
+                    
+                    {!readOnly && step === 3 && (
+                        <div className="flex items-center justify-end gap-3">
+                            {!showConfirm ? (
+                                <Button disabled={!isReadyToSubmit} onClick={() => setShowConfirm(true)} size="lg">
+                                    <Send className="mr-2 h-4 w-4" />
+                                    Finalize Manager Review
+                                </Button>
+                            ) : (
+                                <div className="flex items-center gap-2 p-3 border rounded-lg bg-red-50">
+                                    <span className="text-sm text-destructive font-medium">
+                                        This finalizes the review and sends it to the employee for acknowledgement.
+                                    </span>
+                                    <Button
+                                        variant="destructive"
+                                        onClick={handleSubmit}
+                                        disabled={submitReview.isPending}
+                                    >
+                                        {submitReview.isPending ? "Submitting..." : "Confirm Submit"}
+                                    </Button>
+                                    <Button variant="ghost" onClick={() => setShowConfirm(false)}>
+                                        Cancel
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
                     )}
-                    </div>
+                </div>
+
+                {!readOnly && step === 3 && !isReadyToSubmit && (
+                    <p className="text-sm text-amber-600 text-right">
+                        You must rate and comment on all Goals and Attributes, and provide an Overall Rating/Feedback.
+                    </p>
                 )}
             </div>
         </div>
